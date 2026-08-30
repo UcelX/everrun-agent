@@ -16,6 +16,16 @@ class EventType(StrEnum):
     ACTION_COMPLETED = "action_completed"
     ACTION_RECONCILED = "action_reconciled"
     MISSION_COMPLETED = "mission_completed"
+    EVIDENCE_RECORDED = "evidence_recorded"
+    REVIEW_CONFIRMED = "review_confirmed"
+    HANDOFF_STARTED = "handoff_started"
+    HANDOFF_COMPLETED = "handoff_completed"
+
+
+class Origin(StrEnum):
+    DETERMINISTIC = "deterministic"
+    HUMAN = "human"
+    EXTERNAL_AGENT = "external_agent"
 
 
 @dataclass(frozen=True)
@@ -34,6 +44,7 @@ class Event:
     created_at: str
     previous_hash: str | None
     digest: str
+    origin: Origin = Origin.DETERMINISTIC
 
 
 @dataclass(frozen=True)
@@ -76,10 +87,18 @@ class Checkpoint:
         return replace(self, payload=payload)
 
 
+@dataclass(frozen=True)
+class RestoredMission:
+    checkpoint: Checkpoint
+    state: SemanticState
+    replayed_events: int
+
+
 class RecoveryMode(StrEnum):
     CONTINUE = "continue"
     RECONCILE = "reconcile"
     REPAIR = "repair"
+    REQUEST_REVIEW = "request_review"
     VERIFIED_COMPLETE = "verified_complete"
     ABORT = "abort"
 
@@ -90,6 +109,27 @@ class RecoveryDecision:
     safe: bool
     next_safe_action: str
     reasons: tuple[str, ...] = ()
+    issued_at: str = ""
+    version: int = 1
+    digest: str = ""
+
+    def content(self) -> dict[str, Any]:
+        return {
+            "mode": self.mode.value,
+            "safe": self.safe,
+            "next_safe_action": self.next_safe_action,
+            "reasons": self.reasons,
+            "issued_at": self.issued_at,
+            "version": self.version,
+        }
+
+    def verify(self) -> bool:
+        from .crypto import canonical, sha256_text
+
+        return self.digest == sha256_text(canonical(self.content()))
+
+    def replace(self, **changes: Any) -> RecoveryDecision:
+        return replace(self, **changes)
 
 
 @dataclass(frozen=True)
@@ -105,4 +145,8 @@ class HashChainError(RuntimeError):
 
 
 class UncertainAction(RuntimeError):
+    pass
+
+
+class ConcurrentWriteError(RuntimeError):
     pass

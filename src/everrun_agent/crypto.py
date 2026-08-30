@@ -18,6 +18,7 @@ def event_digest(
     payload: dict[str, Any],
     created_at: str,
     previous_hash: str | None,
+    origin: str = "deterministic",
 ) -> str:
     return sha256_text(
         canonical(
@@ -28,6 +29,7 @@ def event_digest(
                 "payload": payload,
                 "created_at": created_at,
                 "previous_hash": previous_hash,
+                "origin": origin,
             }
         )
     )

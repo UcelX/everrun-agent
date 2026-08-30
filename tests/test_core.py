@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -23,13 +24,12 @@ def test_event_chain_detects_tampering(tmp_path: Path) -> None:
         store.create_mission(Mission("m1", "Ship safely", 3))
         store.append("m1", EventType.WORK_COMPLETED, {"item": "a"})
         assert store.verify_chain("m1").ok
-        store.raw_execute(
-            "UPDATE events SET payload = ? WHERE mission_id = ? AND sequence = 2",
-            ('{"item":"evil"}', "m1"),
-        )
-        report = store.verify_chain("m1")
-        assert not report.ok
-        assert report.trusted_through == 1
+        with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+            store.raw_execute(
+                "UPDATE events SET payload = ? WHERE mission_id = ? AND sequence = 2",
+                ('{"item":"evil"}', "m1"),
+            )
+        assert store.verify_chain("m1").ok
 
 
 def test_projection_rebuilds_semantic_state(tmp_path: Path) -> None:

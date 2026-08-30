@@ -3,6 +3,7 @@ from .ledger import ActionLedger
 from .models import (
     ActionClaim,
     Checkpoint,
+    ConcurrentWriteError,
     Event,
     EventType,
     HashChainError,
@@ -18,6 +19,7 @@ __all__ = [
     "ActionClaim",
     "ActionLedger",
     "Checkpoint",
+    "ConcurrentWriteError",
     "Event",
     "EventType",
     "EverRunStore",

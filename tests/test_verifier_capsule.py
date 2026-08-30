@@ -4,7 +4,7 @@ from pathlib import Path
 
 from everrun_agent import EventType, EverRunStore, Mission
 from everrun_agent.capsule import export_capsule, import_capsule
-from everrun_agent.verifier import verify_command, verify_file, verify_http
+from everrun_agent.verifier import VerifierPolicy, verify_command, verify_file, verify_http
 
 
 def test_file_and_command_verifiers(tmp_path: Path) -> None:
@@ -33,7 +33,11 @@ def test_http_verifier_uses_real_local_server(tmp_path: Path) -> None:
     with socketserver.TCPServer(("127.0.0.1", 0), H) as server:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
-        result = verify_http(f"http://127.0.0.1:{server.server_address[1]}", contains='"ok"')
+        result = verify_http(
+            f"http://127.0.0.1:{server.server_address[1]}",
+            contains='"ok"',
+            policy=VerifierPolicy(allow_private_hosts=True),
+        )
         server.shutdown()
     assert result.ok and result.status_code == 200
 
