@@ -9,6 +9,7 @@ from .adapters import install_hooks, uninstall_hooks
 from .attestation import generate_keypair, sign_capsule, verify_capsule_signature
 from .capsule import export_capsule, import_capsule
 from .demo import run_crash_recovery_demo
+from .environment import EnvironmentSnapshot, validate_environment
 from .handoff import AgentProfile, compile_briefing, handoff
 from .ledger import ActionLedger
 from .models import EventType, Mission, Origin
@@ -66,6 +67,25 @@ def parser() -> argparse.ArgumentParser:
     confirm = sub.add_parser("confirm", help="human confirmation of agent-reported state")
     confirm.add_argument("mission_id")
 
+    close = sub.add_parser(
+        "close", help="explicit terminal transition, fails closed on unresolved work"
+    )
+    close.add_argument("mission_id")
+
+    pin = sub.add_parser("pin-env", help="pin environment facts the mission depends on")
+    pin.add_argument("mission_id")
+    pin.add_argument("pairs", nargs="+", help="key=value pairs")
+
+    dep = sub.add_parser("declare-dep", help="declare that a component depends on other facts")
+    dep.add_argument("mission_id")
+    dep.add_argument("component")
+    dep.add_argument("requires", nargs="+")
+
+    drift = sub.add_parser("check-env", help="compare pinned environment against current values")
+    drift.add_argument("mission_id")
+    drift.add_argument("pairs", nargs="+", help="key=value pairs")
+    drift.add_argument("--json", action="store_true")
+
     reconcile = sub.add_parser("reconcile", help="settle one uncertain side effect")
     reconcile.add_argument("mission_id")
     reconcile.add_argument("key")
@@ -112,6 +132,18 @@ def parser() -> argparse.ArgumentParser:
 
 def _emit(data: dict[str, object], as_json: bool, human: str) -> None:
     print(json.dumps(data, sort_keys=True) if as_json else human)
+
+
+def _pairs(items: list[str]) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for item in items:
+        if "=" not in item:
+            raise ValueError(f"expected key=value, got {item!r}")
+        key, _, value = item.partition("=")
+        if not key.strip():
+            raise ValueError(f"empty key in {item!r}")
+        values[key.strip()] = value
+    return values
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -248,6 +280,38 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(json.dumps({"confirmed": True}))
             return EXIT_OK
+        if args.command == "close":
+            event = store.complete_mission(args.mission_id)
+            print(json.dumps({"closed": True, "sequence": event.sequence}))
+            return EXIT_OK
+        if args.command == "pin-env":
+            store.pin_environment(args.mission_id, EnvironmentSnapshot(_pairs(args.pairs)))
+            print(json.dumps({"pinned": sorted(_pairs(args.pairs))}))
+            return EXIT_OK
+        if args.command == "declare-dep":
+            store.declare_dependency(args.mission_id, args.component, tuple(args.requires))
+            print(json.dumps({"component": args.component, "requires": list(args.requires)}))
+            return EXIT_OK
+        if args.command == "check-env":
+            pinned = store.pinned_environment(args.mission_id)
+            if pinned is None:
+                _emit({"pinned": False}, args.json, "no pinned environment")
+                return EXIT_OK
+            outcome = validate_environment(
+                pinned,
+                EnvironmentSnapshot(_pairs(args.pairs)),
+                store.dependency_graph(args.mission_id),
+            )
+            _emit(
+                {
+                    "safe": outcome.safe,
+                    "changed": list(outcome.changed),
+                    "stale": list(outcome.stale),
+                },
+                args.json,
+                f"safe={outcome.safe} changed={','.join(outcome.changed) or 'none'} stale={','.join(outcome.stale) or 'none'}",
+            )
+            return EXIT_OK if outcome.safe else EXIT_UNSAFE
         if args.command == "reconcile":
             ActionLedger(store, args.mission_id).reconcile(
                 args.key, occurred=args.occurred, external_id=args.external_id

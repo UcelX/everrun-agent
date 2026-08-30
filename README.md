@@ -59,12 +59,18 @@ Run every gate:
 ```bash
 everrun init release-1 "Ship the release" --total 3
 everrun record-decision release-1 d1 "no production restart during traffic"
+everrun pin-env release-1 dataset=v3 model=opus
+everrun declare-dep release-1 index dataset
 everrun complete-work release-1 build
 everrun checkpoint release-1 --reason milestone
 everrun status release-1
 everrun resume release-1
 everrun briefing release-1 --context-tokens 4000
+everrun check-env release-1 dataset=v3 model=opus
+everrun close release-1
 ```
+
+`close` is the only path to `verified_complete`. It refuses to run while any side effect is unresolved, progress is short of target, the chain is unverified, or a declared success contract is unmet.
 
 Exit codes are a safety contract: only a verified-safe mission exits `0`, so this cannot launch onto unsafe state:
 

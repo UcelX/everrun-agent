@@ -11,6 +11,7 @@ from types import TracebackType
 from typing import Any, Self
 
 from .crypto import canonical, event_digest
+from .environment import EnvironmentSnapshot
 from .models import (
     ChainReport,
     Checkpoint,
@@ -293,3 +294,60 @@ class EverRunStore:
                 agent = event.payload.get("to_agent")
                 return str(agent) if agent is not None else None
         return None
+
+    def pin_environment(self, mission_id: str, snapshot: EnvironmentSnapshot) -> Event:
+        return self.append(
+            mission_id, EventType.ENVIRONMENT_PINNED, {"values": dict(snapshot.values)}
+        )
+
+    def pinned_environment(self, mission_id: str) -> EnvironmentSnapshot | None:
+        for event in reversed(self.events(mission_id)):
+            if event.event_type is EventType.ENVIRONMENT_PINNED:
+                values = event.payload.get("values") or {}
+                return EnvironmentSnapshot({str(k): str(v) for k, v in values.items()})
+        return None
+
+    def declare_dependency(
+        self, mission_id: str, component: str, requires: tuple[str, ...]
+    ) -> Event:
+        return self.append(
+            mission_id,
+            EventType.DEPENDENCY_DECLARED,
+            {"component": component, "requires": list(requires)},
+        )
+
+    def dependency_graph(self, mission_id: str) -> dict[str, tuple[str, ...]]:
+        graph: dict[str, tuple[str, ...]] = {}
+        for event in self.events(mission_id):
+            if event.event_type is EventType.DEPENDENCY_DECLARED:
+                component = str(event.payload["component"])
+                graph[component] = tuple(str(item) for item in event.payload.get("requires", ()))
+        return graph
+
+    def complete_mission(self, mission_id: str, contract: object | None = None) -> Event:
+        """Explicit terminal transition that fails closed on unresolved work."""
+
+        from .contracts import SuccessContract, evaluate_contract
+        from .ledger import ActionLedger
+        from .projection import StateProjector
+
+        if not self.verify_chain(mission_id).ok:
+            raise ValueError("cannot close a mission whose event chain is not verified")
+        pending = ActionLedger(self, mission_id).uncertain_details()
+        if pending:
+            raise ValueError(f"cannot close mission with {len(pending)} unresolved side effect(s)")
+        events = self.events(mission_id)
+        state = StateProjector.project(events)
+        if state.total and len(state.completed) < state.total:
+            raise ValueError(
+                f"cannot close mission: progress {len(state.completed)}/{state.total} incomplete"
+            )
+        if isinstance(contract, SuccessContract):
+            result = evaluate_contract(contract, events)
+            if not result.satisfied:
+                raise ValueError(f"success contract unmet: {', '.join(result.missing)}")
+        return self.append(
+            mission_id,
+            EventType.MISSION_COMPLETED,
+            {"completed": len(state.completed), "total": state.total},
+        )

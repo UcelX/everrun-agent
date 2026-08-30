@@ -62,7 +62,12 @@ def test_confirm_requires_separate_authority(tmp_path: Path) -> None:
     )
     assert confirmed.ok
     after = server.handle(ToolRequest("everrun_status", {"mission_id": "m1"}, client="agent"))
-    assert after.data["mode"] == "verified_complete"
+    assert after.data["mode"] == "continue"
+    assert after.data["next_safe_action"] == "close_mission"
+    closed = server.handle(ToolRequest("everrun_close", {"mission_id": "m1"}, client="agent"))
+    assert closed.ok
+    final = server.handle(ToolRequest("everrun_status", {"mission_id": "m1"}, client="agent"))
+    assert final.data["mode"] == "verified_complete"
 
 
 def test_agent_reported_work_is_marked_external(tmp_path: Path) -> None:

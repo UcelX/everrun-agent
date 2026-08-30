@@ -20,6 +20,8 @@ class EventType(StrEnum):
     REVIEW_CONFIRMED = "review_confirmed"
     HANDOFF_STARTED = "handoff_started"
     HANDOFF_COMPLETED = "handoff_completed"
+    ENVIRONMENT_PINNED = "environment_pinned"
+    DEPENDENCY_DECLARED = "dependency_declared"
 
 
 class Origin(StrEnum):
@@ -98,6 +100,7 @@ class RecoveryMode(StrEnum):
     CONTINUE = "continue"
     RECONCILE = "reconcile"
     REPAIR = "repair"
+    WAIT = "wait"
     REQUEST_REVIEW = "request_review"
     VERIFIED_COMPLETE = "verified_complete"
     ABORT = "abort"

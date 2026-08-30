@@ -24,6 +24,7 @@ MUTATING_TOOLS = frozenset(
         "everrun_complete_action",
         "everrun_reconcile_action",
         "everrun_confirm",
+        "everrun_close",
     }
 )
 ALL_TOOLS = READ_ONLY_TOOLS | MUTATING_TOOLS
@@ -118,6 +119,10 @@ class ToolServer:
             origin=Origin.HUMAN,
         )
         return {"confirmed": True}
+
+    def _tool_close(self, store: EverRunStore, request: ToolRequest) -> dict[str, Any]:
+        event = store.complete_mission(request.arguments["mission_id"])
+        return {"closed": True, "sequence": event.sequence}
 
     def _tool_claim_action(self, store: EverRunStore, request: ToolRequest) -> dict[str, Any]:
         args = request.arguments

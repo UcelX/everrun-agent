@@ -29,6 +29,12 @@ def test_external_agent_work_forces_review_and_confirm_clears_it(tmp_path: Path,
     assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])["mode"] == "request_review"
     assert main(["--db", db, "confirm", "m1"]) == EXIT_OK
     assert main(["--db", db, "status", "m1", "--json"]) == EXIT_OK
+    after_confirm = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert after_confirm["mode"] == "continue"
+    assert after_confirm["next_safe_action"] == "close_mission"
+    assert main(["--db", db, "close", "m1"]) == EXIT_OK
+    capsys.readouterr()
+    assert main(["--db", db, "status", "m1", "--json"]) == EXIT_OK
     assert (
         json.loads(capsys.readouterr().out.strip().splitlines()[-1])["mode"] == "verified_complete"
     )
