@@ -7,9 +7,9 @@ __pycache__/
 dist/
 build/
 *.egg-info/
-.relaycore/
+.everrun/
 *.db
 *.db-wal
 *.db-shm
 *.rly
-relay-demo/
+everrun-demo/

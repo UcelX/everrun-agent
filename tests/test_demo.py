@@ -1,4 +1,4 @@
-from relaycore.demo import run_crash_recovery_demo
+from everrun_agent.demo import run_crash_recovery_demo
 
 
 def test_crash_demo_end_to_end(tmp_path):

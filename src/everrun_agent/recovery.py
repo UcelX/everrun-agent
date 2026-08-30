@@ -1,10 +1,10 @@
 from .ledger import ActionLedger
 from .models import RecoveryDecision, RecoveryMode
 from .projection import StateProjector
-from .store import RelayStore
+from .store import EverRunStore
 
 
-def recover(store: RelayStore, mission_id: str) -> RecoveryDecision:
+def recover(store: EverRunStore, mission_id: str) -> RecoveryDecision:
     report = store.verify_chain(mission_id)
     if not report.ok:
         return RecoveryDecision(

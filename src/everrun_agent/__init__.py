@@ -12,7 +12,7 @@ from .models import (
 )
 from .projection import StateProjector
 from .recovery import recover
-from .store import RelayStore
+from .store import EverRunStore
 
 __all__ = [
     "ActionClaim",
@@ -20,10 +20,10 @@ __all__ = [
     "Checkpoint",
     "Event",
     "EventType",
+    "EverRunStore",
     "HashChainError",
     "Mission",
     "RecoveryMode",
-    "RelayStore",
     "StateProjector",
     "UncertainAction",
     "checkpoint",

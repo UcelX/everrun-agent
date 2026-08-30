@@ -1,4 +1,4 @@
-# RelayCore v0.1 Traceability
+# EverRun Agent v0.1 Traceability
 
 | Requirement | Acceptance evidence | Status |
 |---|---|---|

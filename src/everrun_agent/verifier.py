@@ -44,7 +44,9 @@ def verify_command(argv: list[str], contains: str | None = None, timeout: float 
 
 def verify_http(url: str, contains: str | None = None, timeout: float = 10) -> Evidence:
     try:
-        with urlopen(Request(url, headers={"User-Agent": "RelayCore/0.1"}), timeout=timeout) as r:
+        with urlopen(
+            Request(url, headers={"User-Agent": "EverRun Agent/0.1"}), timeout=timeout
+        ) as r:
             body = r.read(1048576).decode("utf-8", errors="replace")
             code = r.status
         return Evidence(

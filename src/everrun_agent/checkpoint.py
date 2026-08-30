@@ -3,10 +3,10 @@ from dataclasses import asdict
 from .crypto import canonical, sha256_text
 from .models import Checkpoint, EventType
 from .projection import StateProjector
-from .store import RelayStore
+from .store import EverRunStore
 
 
-def checkpoint(store: RelayStore, mission_id: str) -> Checkpoint:
+def checkpoint(store: EverRunStore, mission_id: str) -> Checkpoint:
     events = store.events(mission_id)
     payload = canonical(asdict(StateProjector.project(events)))
     digest = sha256_text(payload)

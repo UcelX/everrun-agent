@@ -10,14 +10,14 @@ from .demo import run_crash_recovery_demo
 from .models import EventType, Mission
 from .projection import StateProjector
 from .recovery import recover
-from .store import RelayStore
+from .store import EverRunStore
 
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="relay", description="Durable mission continuity for AI agents"
+        prog="everrun", description="Durable mission continuity for AI agents"
     )
-    p.add_argument("--db", default=".relaycore/relay.db")
+    p.add_argument("--db", default=".everrun_agent/relay.db")
     sub = p.add_subparsers(dest="command", required=True)
     x = sub.add_parser("init")
     x.add_argument("mission_id")
@@ -37,7 +37,7 @@ def parser() -> argparse.ArgumentParser:
     x = sub.add_parser("import")
     x.add_argument("path")
     x = sub.add_parser("demo")
-    x.add_argument("--workdir", default="relay-demo")
+    x.add_argument("--workdir", default="everrun-demo")
     x.add_argument("--total", type=int, default=100)
     x.add_argument("--crash-at", type=int, default=40)
     return p
@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     db = Path(a.db)
     db.parent.mkdir(parents=True, exist_ok=True)
-    with RelayStore(db) as store:
+    with EverRunStore(db) as store:
         if a.command == "init":
             store.create_mission(Mission(a.mission_id, a.goal, a.total))
             print(a.mission_id)

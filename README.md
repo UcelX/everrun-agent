@@ -1,14 +1,14 @@
-# RelayCore
+# EverRun Agent
 
 > **Agents are temporary. Missions survive.**
 
-RelayCore is a small, local-first foundation for durable AI-agent missions. It records mission facts in a hash-chained event log, projects semantic state deterministically, blocks blind retries of uncertain side effects, verifies reality, and exports portable integrity-checked capsules.
+EverRun Agent is a small, local-first foundation for durable AI-agent missions. It records mission facts in a hash-chained event log, projects semantic state deterministically, blocks blind retries of uncertain side effects, verifies reality, and exports portable integrity-checked capsules.
 
 This is **v0.1 foundational core**, not a hosted SaaS or complete agent framework.
 
 ## Why
 
-Long-running agents crash, lose context, switch models, and repeat irreversible actions. RelayCore separates temporary conversation context from durable mission state and provides one safe next action after recovery.
+Long-running agents crash, lose context, switch models, and repeat irreversible actions. EverRun Agent separates temporary conversation context from durable mission state and provides one safe next action after recovery.
 
 ## Implemented
 
@@ -28,17 +28,17 @@ Long-running agents crash, lose context, switch models, and repeat irreversible 
 python3 -m venv .venv
 .venv/bin/pip install -e .
 
-relay --db .relaycore/relay.db init mission-1 "Process documents" --total 2
-relay --db .relaycore/relay.db complete-work mission-1 document-a
-relay --db .relaycore/relay.db status mission-1
-relay --db .relaycore/relay.db verify mission-1
-relay --db .relaycore/relay.db export mission-1 mission.rly
+everrun --db .everrun_agent/relay.db init mission-1 "Process documents" --total 2
+everrun --db .everrun_agent/relay.db complete-work mission-1 document-a
+everrun --db .everrun_agent/relay.db status mission-1
+everrun --db .everrun_agent/relay.db verify mission-1
+everrun --db .everrun_agent/relay.db export mission-1 mission.rly
 ```
 
 ## Run the proof
 
 ```bash
-relay demo --workdir /tmp/relay-demo --total 100 --crash-at 40
+everrun demo --workdir /tmp/everrun-demo --total 100 --crash-at 40
 ```
 
 The demo records 40 items, performs one external side effect, simulates a crash before recording completion, refuses blind continuation, reconciles the effect from reality, and completes all 100 items without duplicates.
@@ -78,7 +78,7 @@ CLI / future MCP adapters
 - Single-host SQLite; no distributed consensus.
 - No MCP server, hosted control plane, encryption, RBAC, or agent handoff yet.
 - Command verifier executes only explicit argv and is not a sandbox.
-- Exactly-once external effects are impossible in the crash gap; RelayCore provides mandatory reconciliation instead.
+- Exactly-once external effects are impossible in the crash gap; EverRun Agent provides mandatory reconciliation instead.
 - Capsule integrity is a digest, not yet a public-key signature.
 
 ## Roadmap
@@ -90,6 +90,6 @@ CLI / future MCP adapters
 
 ## Origin and license
 
-RelayCore is an independent implementation inspired by durable execution and semantic recovery concepts demonstrated by [Cyrax321/CONTINUUM](https://github.com/Cyrax321/CONTINUUM). No CONTINUUM source files are copied into this repository.
+EverRun Agent is an independent implementation inspired by durable execution and semantic recovery concepts demonstrated by [Cyrax321/CONTINUUM](https://github.com/Cyrax321/CONTINUUM). No CONTINUUM source files are copied into this repository.
 
 Licensed under Apache License 2.0.

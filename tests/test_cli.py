@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from relaycore.cli import main
+from everrun_agent.cli import main
 
 
 def test_cli_mission_status_verify_export(tmp_path: Path, capsys):

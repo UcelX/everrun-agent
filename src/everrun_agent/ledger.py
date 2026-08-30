@@ -6,11 +6,11 @@ from typing import Any
 
 from .crypto import canonical, sha256_text
 from .models import ActionClaim, EventType, UncertainAction
-from .store import RelayStore
+from .store import EverRunStore
 
 
 class ActionLedger:
-    def __init__(self, store: RelayStore, mission_id: str):
+    def __init__(self, store: EverRunStore, mission_id: str):
         self.store = store
         self.mission_id = mission_id
 

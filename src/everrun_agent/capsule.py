@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Any, cast
 
 from .crypto import canonical, sha256_text
-from .store import RelayStore
+from .store import EverRunStore
 
-FORMAT = "relaycore-capsule-v1"
+FORMAT = "everrun-agent-capsule-v1"
 
 
-def export_capsule(store: RelayStore, mission_id: str, path: str | Path) -> Path:
+def export_capsule(store: EverRunStore, mission_id: str, path: str | Path) -> Path:
     mission = store.get_mission(mission_id)
     events = store.events(mission_id)
     report = store.verify_chain(mission_id)
@@ -48,7 +48,7 @@ def export_capsule(store: RelayStore, mission_id: str, path: str | Path) -> Path
     return target
 
 
-def import_capsule(store: RelayStore, path: str | Path) -> str:
+def import_capsule(store: EverRunStore, path: str | Path) -> str:
     env = cast(dict[str, Any], json.loads(Path(path).read_text(encoding="utf-8")))
     body = env["body"]
     if body.get("format") != FORMAT or sha256_text(canonical(body)) != env.get("digest"):

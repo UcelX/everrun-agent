@@ -11,7 +11,7 @@ from .crypto import canonical, event_digest
 from .models import ChainReport, Event, EventType, Mission
 
 
-class RelayStore:
+class EverRunStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.conn = sqlite3.connect(self.path)

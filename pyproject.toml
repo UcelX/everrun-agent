@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "relaycore"
+name = "everrun-agent"
 version = "0.1.0"
 description = "Durable mission continuity primitives for autonomous AI agents."
 readme = "README.md"
@@ -16,10 +16,10 @@ dependencies = []
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
 
 [project.scripts]
-relay = "relaycore.cli:main"
+everrun = "everrun_agent.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/relaycore"]
+packages = ["src/everrun_agent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -31,4 +31,4 @@ target-version = "py311"
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["src/relaycore"]
+files = ["src/everrun_agent"]

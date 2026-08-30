@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from relaycore import (
+from everrun_agent import (
     ActionLedger,
     EventType,
+    EverRunStore,
     Mission,
     RecoveryMode,
-    RelayStore,
     StateProjector,
     UncertainAction,
     checkpoint,
@@ -19,7 +19,7 @@ from relaycore import (
 
 def test_event_chain_detects_tampering(tmp_path: Path) -> None:
     db = tmp_path / "relay.db"
-    with RelayStore(db) as store:
+    with EverRunStore(db) as store:
         store.create_mission(Mission("m1", "Ship safely", 3))
         store.append("m1", EventType.WORK_COMPLETED, {"item": "a"})
         assert store.verify_chain("m1").ok
@@ -33,7 +33,7 @@ def test_event_chain_detects_tampering(tmp_path: Path) -> None:
 
 
 def test_projection_rebuilds_semantic_state(tmp_path: Path) -> None:
-    with RelayStore(tmp_path / "relay.db") as store:
+    with EverRunStore(tmp_path / "relay.db") as store:
         store.create_mission(Mission("m1", "Process files", 2))
         store.append("m1", EventType.DECISION_RECORDED, {"id": "d1", "text": "Use UTF-8"})
         store.append("m1", EventType.WORK_COMPLETED, {"item": "a"})
@@ -48,16 +48,16 @@ def test_projection_rebuilds_semantic_state(tmp_path: Path) -> None:
 
 def test_sqlite_roundtrip_and_sequence(tmp_path: Path) -> None:
     db = tmp_path / "relay.db"
-    with RelayStore(db) as store:
+    with EverRunStore(db) as store:
         store.create_mission(Mission("m1", "Persist", 1))
         store.append("m1", EventType.WORK_COMPLETED, {"item": "a"})
-    with RelayStore(db) as reopened:
+    with EverRunStore(db) as reopened:
         assert [e.sequence for e in reopened.events("m1")] == [1, 2]
         assert reopened.get_mission("m1").goal == "Persist"
 
 
 def test_checkpoint_detects_modified_payload(tmp_path: Path) -> None:
-    with RelayStore(tmp_path / "relay.db") as store:
+    with EverRunStore(tmp_path / "relay.db") as store:
         store.create_mission(Mission("m1", "Seal", 1))
         cp = checkpoint(store, "m1")
         assert cp.verify()
@@ -66,7 +66,7 @@ def test_checkpoint_detects_modified_payload(tmp_path: Path) -> None:
 
 
 def test_completed_action_is_idempotent(tmp_path: Path) -> None:
-    with RelayStore(tmp_path / "relay.db") as store:
+    with EverRunStore(tmp_path / "relay.db") as store:
         store.create_mission(Mission("m1", "Deploy", 1))
         ledger = ActionLedger(store, "m1")
         first = ledger.claim("deploy", {"commit": "abc"})
@@ -77,7 +77,7 @@ def test_completed_action_is_idempotent(tmp_path: Path) -> None:
 
 
 def test_started_action_blocks_blind_retry(tmp_path: Path) -> None:
-    with RelayStore(tmp_path / "relay.db") as store:
+    with EverRunStore(tmp_path / "relay.db") as store:
         store.create_mission(Mission("m1", "Deploy", 1))
         ledger = ActionLedger(store, "m1")
         ledger.claim("deploy", {"commit": "abc"})
@@ -86,7 +86,7 @@ def test_started_action_blocks_blind_retry(tmp_path: Path) -> None:
 
 
 def test_recovery_requires_reconciliation_first(tmp_path: Path) -> None:
-    with RelayStore(tmp_path / "relay.db") as store:
+    with EverRunStore(tmp_path / "relay.db") as store:
         store.create_mission(Mission("m1", "Deploy", 1))
         ledger = ActionLedger(store, "m1")
         claim = ledger.claim("deploy", {"commit": "abc"})
