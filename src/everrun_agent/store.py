@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -22,6 +23,19 @@ from .models import (
 )
 
 SCHEMA_VERSION = 2
+MISSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+MAX_GOAL_CHARS = 8192
+MAX_TOTAL = 10_000_000
+MAX_PAYLOAD_CHARS = 65536
+MAX_ITEM_CHARS = 4096
+
+
+def validate_mission_id(mission_id: str) -> str:
+    if not MISSION_ID_PATTERN.match(mission_id or ""):
+        raise ValueError(
+            "mission_id must be 1-128 chars of letters, digits, dot, underscore, or hyphen"
+        )
+    return mission_id
 
 
 class EverRunStore:
@@ -132,8 +146,13 @@ class EverRunStore:
         return Event(mid, seq, typ, payload, now, prev, digest, origin)
 
     def create_mission(self, mission: Mission) -> None:
-        if not mission.mission_id.strip() or not mission.goal.strip() or mission.total < 0:
-            raise ValueError("invalid mission")
+        validate_mission_id(mission.mission_id)
+        if not mission.goal.strip():
+            raise ValueError("mission goal must not be empty")
+        if len(mission.goal) > MAX_GOAL_CHARS:
+            raise ValueError(f"mission goal exceeds {MAX_GOAL_CHARS} characters")
+        if mission.total < 0 or mission.total > MAX_TOTAL:
+            raise ValueError(f"mission total must be between 0 and {MAX_TOTAL}")
         with self.transaction():
             self.conn.execute(
                 "INSERT INTO missions VALUES(?,?,?)",
@@ -158,6 +177,9 @@ class EverRunStore:
         payload: dict[str, Any],
         origin: Origin = Origin.DETERMINISTIC,
     ) -> Event:
+        validate_mission_id(mid)
+        if len(canonical(payload)) > MAX_PAYLOAD_CHARS:
+            raise ValueError(f"event payload exceeds {MAX_PAYLOAD_CHARS} characters")
         try:
             with self.transaction():
                 return self._insert_event(mid, typ, payload, origin)
@@ -247,6 +269,8 @@ class EverRunStore:
     def append_work(
         self, mission_id: str, item: str, origin: Origin = Origin.DETERMINISTIC
     ) -> Event:
+        if not item or len(item) > MAX_ITEM_CHARS:
+            raise ValueError(f"work item must be 1-{MAX_ITEM_CHARS} characters")
         return self.append(mission_id, EventType.WORK_COMPLETED, {"item": item}, origin=origin)
 
     def append_decision(
