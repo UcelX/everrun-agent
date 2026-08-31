@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Any
 
 BOUNDARIES = ("after-start", "after-filesystem", "after-claim", "after-effect", "during-checkpoint")
+SIGKILL_RETURNCODE = -9
+SIGKILL_NUMBER = getattr(signal, "SIGKILL", None)
 
 
 def build_report(
@@ -36,7 +38,7 @@ def build_report(
     marker_count = int(recovery.get("marker_count", 0))
     verified = (
         marker_reached
-        and returncode == -signal.SIGKILL
+        and returncode == SIGKILL_RETURNCODE
         and mode in {"reconcile", "request_review", "continue", "verified_complete"}
         and chain_ok
         and marker_count <= 1
@@ -49,7 +51,7 @@ def build_report(
         "marker_reached": marker_reached,
         "mode_after_restart": mode,
         "returncode": returncode,
-        "signal": "SIGKILL" if returncode == -signal.SIGKILL else "unexpected",
+        "signal": "SIGKILL" if returncode == SIGKILL_RETURNCODE else "unexpected",
         "verified": verified,
     }
 
@@ -85,6 +87,17 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=120)
     parser.add_argument("--execute-destructive", action="store_true")
     args = parser.parse_args()
+    if SIGKILL_NUMBER is None:
+        print(
+            json.dumps(
+                {
+                    "executed": False,
+                    "reason": "literal SIGKILL is unavailable on this platform",
+                    "boundary": args.boundary,
+                }
+            )
+        )
+        return 2
     if not args.execute_destructive or os.environ.get("EVERRUN_ALLOW_REAL_HERMES_SIGKILL") != "YES":
         print(
             json.dumps(
@@ -122,7 +135,7 @@ def main() -> int:
         print(json.dumps(report, sort_keys=True))
         return 20
 
-    os.kill(process.pid, signal.SIGKILL)
+    os.kill(process.pid, int(SIGKILL_NUMBER))
     returncode = process.wait()
     executable = Path(sys.executable).with_name("everrun")
     status = _json_command(
