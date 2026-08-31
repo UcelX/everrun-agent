@@ -48,6 +48,58 @@ def test_integrator_fails_if_hermes_test_returns_zero_but_server_is_missing(
     assert not skill.exists()
 
 
+def test_integrator_rejects_partial_tool_discovery_and_leaves_no_skill(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    monkeypatch.setattr(hermes_integration.shutil, "which", lambda _: "/usr/bin/hermes")  # type: ignore[attr-defined]
+
+    def runner(args: list[str], **_: object) -> _Completed:
+        if "test" in args:
+            return _Completed(stdout="✓ Connected (10ms)\n✓ Tools discovered: 12")
+        if "remove" in args:
+            return _Completed(stdout="✓ Removed 'everrun'")
+        return _Completed(stdout="✓ Saved 'everrun' (13/13 tools enabled)")
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match="expected exactly 13"):
+        integrate_hermes("qa", hermes_home=tmp_path, runner=runner)
+    skill = tmp_path / "profiles/qa/skills/autonomous-ai-agents/everrun-lifecycle/SKILL.md"
+    assert not skill.exists()
+
+
+def test_hermes_uninstall_does_not_create_state_directory(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    monkeypatch.setattr(hermes_integration.shutil, "which", lambda _: "/usr/bin/hermes")  # type: ignore[attr-defined]
+
+    def runner(args: list[str], **_: object) -> _Completed:
+        return _Completed(stdout="✓ Removed 'everrun'")
+
+    result = integrate_hermes("qa", hermes_home=tmp_path, uninstall=True, runner=runner)
+    assert result["removed"] is True
+    assert not (tmp_path / "profiles/qa/everrun").exists()
+
+
+def test_integrator_fails_before_mutation_when_mcp_dependency_is_missing(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    monkeypatch.setattr(hermes_integration.shutil, "which", lambda _: "/usr/bin/hermes")  # type: ignore[attr-defined]
+    monkeypatch.setattr(hermes_integration, "mcp_available", lambda: False)
+    called = False
+
+    def runner(args: list[str], **_: object) -> _Completed:
+        nonlocal called
+        called = True
+        return _Completed()
+
+    import pytest
+
+    with pytest.raises(RuntimeError, match=r"everrun-agent\[mcp\]"):
+        integrate_hermes("qa", hermes_home=tmp_path, runner=runner)
+    assert called is False
+
+
 def test_integrator_uses_noninteractive_enable_all_and_requires_discovery(
     tmp_path: Path, monkeypatch: object
 ) -> None:

@@ -168,7 +168,7 @@ For another Hermes profile:
 everrun integrate hermes --profile creator
 ```
 
-The installer creates profile-local state, pins the authenticated stdio identity, registers all 13 MCP tools, installs the `everrun-lifecycle` policy skill, tests the handshake, and rolls back partial MCP configuration if verification fails. The skill makes normal multi-step prompts discover/start/checkpoint automatically; users do not need to dictate EverRun tool names.
+The installer first verifies the MCP dependency, then creates profile-local state, pins the authenticated stdio identity, registers the exact 13-tool contract, installs the `everrun-lifecycle` policy skill, and rolls back its newly-created MCP/skill assets if verification fails. The skill makes normal multi-step prompts discover/start/checkpoint automatically; users do not need to dictate EverRun tool names. Install with `everrun-agent[mcp]` (or source extra `.[mcp]`) before running integration.
 
 Useful integration commands:
 

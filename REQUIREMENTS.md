@@ -76,7 +76,9 @@ Every row is proven by an executable test in `tests/`. Run all gates with
 | Real Hermes SIGKILL integration | Run 002 `literal-sigkill-005`, process exit `-9`, marker count 1, valid chain | VERIFIED LIVE |
 | One-command profile-safe Hermes integration | `test_integrator_uses_noninteractive_enable_all_and_requires_discovery`; Creator discovered 13 tools and mutation succeeded | VERIFIED LIVE |
 | Hermes integration installs lifecycle policy automatically | `test_hermes_dry_run_is_profile_local_and_non_mutating`, `test_lifecycle_policy_uses_native_tool_names_and_requires_natural_discovery`, natural Creator dogfood mission `ucel-everrun-lifecycle-natural-draft` | VERIFIED LIVE |
-| Hermes uninstall removes only unchanged EverRun-owned policy | `test_hermes_uninstall_removes_only_everrun_owned_skill`, `test_hermes_uninstall_preserves_user_modified_skill` | VERIFIED |
+| Hermes uninstall removes only unchanged EverRun-owned policy and creates no state | `test_hermes_uninstall_removes_only_everrun_owned_skill`, `test_hermes_uninstall_preserves_user_modified_skill`, `test_hermes_uninstall_does_not_create_state_directory` | VERIFIED |
+| Hermes integration fails before mutation without MCP dependency | `test_integrator_fails_before_mutation_when_mcp_dependency_is_missing` | VERIFIED |
+| Hermes handshake requires the exact 13-tool contract | `test_integrator_rejects_partial_tool_discovery_and_leaves_no_skill` | VERIFIED |
 | Automated machine-readable Hermes dogfood regression | `test_protocol_fallback_dogfood_transitions_once_and_valid_chain` | VERIFIED |
 
 See `DOGFOOD.md` for observed friction, live acceptance evidence, and remaining P1/P2 soak scope. All P0 rows are closed; public visibility remains an explicit operator decision.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -29,6 +30,10 @@ def lifecycle_skill_text() -> str:
 
 def _skill_digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def mcp_available() -> bool:
+    return importlib.util.find_spec("mcp") is not None
 
 
 def plan_hermes_integration(profile: str, hermes_home: Path | None = None) -> IntegrationPlan:
@@ -70,10 +75,13 @@ def integrate_hermes(
         return {"changed": False, "dry_run": True, "uninstall": uninstall, "plan": asdict(plan)}
     if shutil.which("hermes") is None:
         raise RuntimeError("Hermes CLI not found; install Hermes before integration")
+    if not uninstall and not mcp_available():
+        raise RuntimeError("MCP support is missing; install `everrun-agent[mcp]` first")
     state = Path(plan.state_dir)
     skill = Path(plan.skill)
-    state.mkdir(parents=True, exist_ok=True, mode=0o700)
-    state.chmod(0o700)
+    if not uninstall:
+        state.mkdir(parents=True, exist_ok=True, mode=0o700)
+        state.chmod(0o700)
     args = ["hermes", "--profile", profile, "mcp", "remove" if uninstall else "add", "everrun"]
     if not uninstall:
         args.extend(["--command", plan.command[0]])
@@ -115,7 +123,8 @@ def integrate_hermes(
         )
         probe_output = f"{probe.stdout}\n{probe.stderr}"
         match = re.search(r"Tools discovered:\s*(\d+)", probe_output)
-        if probe.returncode != 0 or "connected" not in probe_output.lower() or not match:
+        actual_tools = int(match.group(1)) if match else 0
+        if probe.returncode != 0 or "connected" not in probe_output.lower() or actual_tools != 13:
             rollback = runner(
                 ["hermes", "--profile", profile, "mcp", "remove", "everrun"],
                 check=False,
@@ -127,8 +136,17 @@ def integrate_hermes(
             suffix = ""
             if rollback.returncode != 0:
                 suffix = f"; rollback also failed: {rollback_output}"
-            raise RuntimeError(f"EverRun handshake failed: {probe_output.strip()}{suffix}")
-        tools_discovered = int(match.group(1))
+            if skill.exists() and _skill_digest(skill.read_text(encoding="utf-8")) == _skill_digest(
+                policy
+            ):
+                skill.unlink()
+            detail = (
+                f"expected exactly 13 tools, discovered {actual_tools}; "
+                if match
+                else "tool discovery count missing; "
+            )
+            raise RuntimeError(f"EverRun handshake failed: {detail}{probe_output.strip()}{suffix}")
+        tools_discovered = actual_tools
     return {
         "changed": completed.returncode == 0,
         "removed": uninstall,
