@@ -72,7 +72,7 @@ The most cautious applicable signal wins, so evaluation order can never produce 
 | Credential leakage | Redaction in evidence, capsules carry no secrets, `0600` files |
 | SSRF via verifier | Scheme allowlist, private and metadata refusal, redirect revalidation |
 | Arbitrary command execution | Executable allowlist, clean environment, timeout, bounded output |
-| Unauthorized tool mutation | Deny-by-default clients and separate confirmation authority |
+|| Unauthorized tool mutation | Deny-by-default mutation, transport-pinned or per-client-token identity, and one-use out-of-band confirmation tickets |
 | Forged portable state | Capsule digest plus signer attestation, transactional import |
 
 ## Modification rules
@@ -81,4 +81,5 @@ The most cautious applicable signal wins, so evaluation order can never produce 
 2. Every new event type must be projected and covered by chain verification.
 3. Any new external effect must route through the ledger and the gate.
 4. Never add an assume-success reconciliation path.
-5. Keep the core dependency-free; optional features go behind extras.
+5. Never trust request-supplied client identity without transport pinning or per-client authentication.
+6. Keep the core dependency-free; optional features go behind extras.

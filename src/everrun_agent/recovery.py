@@ -6,8 +6,8 @@ from .contracts import SuccessContract, evaluate_contract
 from .crypto import canonical, sha256_text
 from .environment import EnvironmentSnapshot, validate_environment
 from .ledger import ActionLedger
-from .models import EventType, Origin, RecoveryDecision, RecoveryMode
-from .projection import StateProjector
+from .models import EventType, RecoveryDecision, RecoveryMode
+from .projection import StateProjector, unconfirmed_external_progress
 from .store import EverRunStore
 
 SEVERITY: dict[RecoveryMode, int] = {
@@ -64,11 +64,7 @@ def recover(
             )
         )
 
-    unconfirmed_external = any(
-        event.event_type is EventType.WORK_COMPLETED and event.origin is Origin.EXTERNAL_AGENT
-        for event in events
-    ) and not any(event.event_type is EventType.REVIEW_CONFIRMED for event in events)
-    if unconfirmed_external:
+    if unconfirmed_external_progress(events):
         candidates.append(
             (
                 RecoveryMode.REQUEST_REVIEW,

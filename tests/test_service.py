@@ -19,7 +19,7 @@ def _server(tmp_path: Path, **kwargs: object) -> ToolServer:
 
 
 def test_read_only_tools_are_allowed_without_mutation_grant(tmp_path: Path) -> None:
-    server = _server(tmp_path)
+    server = _server(tmp_path, mutating_clients=("operator",))
     server.handle(
         ToolRequest(
             "everrun_start", {"mission_id": "m1", "goal": "svc", "total": 1}, client="operator"
@@ -29,6 +29,18 @@ def test_read_only_tools_are_allowed_without_mutation_grant(tmp_path: Path) -> N
     assert reply.ok
     assert reply.data["mode"] == "continue"
     assert "everrun_status" in READ_ONLY_TOOLS
+
+
+def test_default_server_denies_all_mutation(tmp_path: Path) -> None:
+    """C3: mutating_clients=None used to mean "allow everyone"."""
+
+    server = _server(tmp_path)
+    with pytest.raises(AuthorizationError):
+        server.handle(
+            ToolRequest(
+                "everrun_start", {"mission_id": "m1", "goal": "svc", "total": 1}, client="anyone"
+            )
+        )
 
 
 def test_mutating_tools_deny_unknown_clients(tmp_path: Path) -> None:
@@ -42,7 +54,7 @@ def test_mutating_tools_deny_unknown_clients(tmp_path: Path) -> None:
 
 
 def test_confirm_requires_separate_authority(tmp_path: Path) -> None:
-    server = _server(tmp_path, mutating_clients=("agent",), confirm_token="human-only")
+    server = _server(tmp_path, mutating_clients=("agent",))
     server.handle(
         ToolRequest(
             "everrun_start", {"mission_id": "m1", "goal": "svc", "total": 1}, client="agent"
@@ -53,14 +65,26 @@ def test_confirm_requires_separate_authority(tmp_path: Path) -> None:
     )
     review = server.handle(ToolRequest("everrun_status", {"mission_id": "m1"}, client="agent"))
     assert review.data["mode"] == "request_review"
+    # C2: an agent cannot self-confirm; a ticket must be minted out-of-band.
     with pytest.raises(AuthorizationError):
         server.handle(ToolRequest("everrun_confirm", {"mission_id": "m1"}, client="agent"))
-    confirmed = server.handle(
-        ToolRequest(
-            "everrun_confirm", {"mission_id": "m1"}, client="agent", confirm_token="human-only"
+    with pytest.raises(AuthorizationError):
+        server.handle(
+            ToolRequest(
+                "everrun_confirm", {"mission_id": "m1"}, client="agent", confirm_token="guessed"
+            )
         )
+    with EverRunStore(tmp_path / "everrun.db") as operator_store:
+        ticket = operator_store.issue_confirm_ticket("m1")
+    confirmed = server.handle(
+        ToolRequest("everrun_confirm", {"mission_id": "m1", "ticket": ticket}, client="agent")
     )
     assert confirmed.ok
+    # Single use: replaying the same ticket is refused.
+    with pytest.raises(AuthorizationError):
+        server.handle(
+            ToolRequest("everrun_confirm", {"mission_id": "m1", "ticket": ticket}, client="agent")
+        )
     after = server.handle(ToolRequest("everrun_status", {"mission_id": "m1"}, client="agent"))
     assert after.data["mode"] == "continue"
     assert after.data["next_safe_action"] == "close_mission"
@@ -71,7 +95,7 @@ def test_confirm_requires_separate_authority(tmp_path: Path) -> None:
 
 
 def test_agent_reported_work_is_marked_external(tmp_path: Path) -> None:
-    server = _server(tmp_path)
+    server = _server(tmp_path, mutating_clients=("agent",))
     server.handle(
         ToolRequest(
             "everrun_start", {"mission_id": "m1", "goal": "svc", "total": 2}, client="agent"
@@ -85,7 +109,7 @@ def test_agent_reported_work_is_marked_external(tmp_path: Path) -> None:
 
 
 def test_two_phase_action_tools_refuse_duplicate_effects(tmp_path: Path) -> None:
-    server = _server(tmp_path)
+    server = _server(tmp_path, mutating_clients=("agent",))
     server.handle(
         ToolRequest(
             "everrun_start", {"mission_id": "m1", "goal": "svc", "total": 1}, client="agent"
@@ -118,7 +142,7 @@ def test_two_phase_action_tools_refuse_duplicate_effects(tmp_path: Path) -> None
 
 
 def test_unknown_tool_and_malformed_payload_fail_closed(tmp_path: Path) -> None:
-    server = _server(tmp_path)
+    server = _server(tmp_path, mutating_clients=("agent",))
     reply = server.handle(ToolRequest("everrun_nope", {}, client="agent"))
     assert not reply.ok and reply.error_code == "unknown_tool"
     bad = server.handle(ToolRequest("everrun_status", {}, client="agent"))
@@ -126,7 +150,7 @@ def test_unknown_tool_and_malformed_payload_fail_closed(tmp_path: Path) -> None:
 
 
 def test_jsonrpc_dispatch_round_trip(tmp_path: Path) -> None:
-    server = _server(tmp_path)
+    server = _server(tmp_path, mutating_clients=("agent",))
     request = json.dumps(
         {
             "jsonrpc": "2.0",

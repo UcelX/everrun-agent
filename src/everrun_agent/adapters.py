@@ -65,16 +65,25 @@ def _load(path: Path) -> dict[str, Any]:
     return {"hooks": {}}
 
 
-def install_hooks(path: str | Path, client: str, db_path: str | Path) -> dict[str, str]:
+def install_hooks(path: str | Path, client: str, db_path: str | Path) -> dict[str, list[str]]:
+    """Install lifecycle hooks as ARGV ARRAYS for commands that actually exist.
+
+    H7: hooks used to be f-string shell commands, so a db path containing shell
+    metacharacters became an injected pipeline, and two of the three installed
+    commands (``gate``, ``observe``) were not real CLI subcommands at all, so
+    every hook failed at runtime.
+    """
+
     if client not in SUPPORTED_CLIENTS:
         raise ValueError(f"unsupported client: {client}")
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     config = _load(target)
-    entry = {
-        "session_start": f"everrun --db {db_path} briefing",
-        "pre_tool_use": f"everrun --db {db_path} gate",
-        "post_tool_use": f"everrun --db {db_path} observe",
+    db = str(db_path)
+    entry: dict[str, list[str]] = {
+        "session_start": ["everrun", "--db", db, "briefing", "$EVERRUN_MISSION"],
+        "pre_tool_use": ["everrun", "--db", db, "resume", "$EVERRUN_MISSION"],
+        "post_tool_use": ["everrun", "--db", db, "status", "$EVERRUN_MISSION", "--json"],
     }
     config["hooks"][client] = entry
     target.write_text(json.dumps(config, indent=2, sort_keys=True), encoding="utf-8")

@@ -7,6 +7,8 @@ import pytest
 from everrun_agent import ActionLedger, EventType, EverRunStore, Mission
 from everrun_agent.capsule import import_capsule
 
+from .helpers.tamper import delete_event
+
 
 def test_mission_and_start_event_are_atomic(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -79,14 +81,15 @@ def test_invalid_capsule_import_rolls_back(tmp_path: Path) -> None:
     )
     with EverRunStore(tmp_path / "everrun.db") as store:
         with pytest.raises(ValueError, match="invalid capsule"):
-            import_capsule(store, capsule)
+            import_capsule(store, capsule, allow_unsigned=True)
         assert store.conn.execute("SELECT count(*) FROM missions").fetchone()[0] == 0
 
 
 def test_deleted_chain_tail_is_detected(tmp_path: Path) -> None:
-    with EverRunStore(tmp_path / "everrun.db") as store:
+    db = tmp_path / "everrun.db"
+    with EverRunStore(db) as store:
         store.create_mission(Mission("m1", "tail guard", 2))
         store.append("m1", EventType.WORK_COMPLETED, {"item": "a"})
-        store.raw_execute("DROP TRIGGER IF EXISTS events_no_delete")
-        store.raw_execute("DELETE FROM events WHERE mission_id='m1' AND sequence=2")
+    delete_event(db, "m1", 2)
+    with EverRunStore(db) as store:
         assert not store.verify_chain("m1").ok

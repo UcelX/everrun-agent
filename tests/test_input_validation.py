@@ -44,7 +44,7 @@ def test_negative_or_absurd_totals_are_refused(tmp_path: Path) -> None:
 
 
 def test_tool_surface_rejects_unsafe_identifiers(tmp_path: Path) -> None:
-    server = ToolServer(db_path=tmp_path / "everrun.db")
+    server = ToolServer(db_path=tmp_path / "everrun.db", mutating_clients=("agent",))
     reply = server.handle(
         ToolRequest(
             "everrun_start", {"mission_id": "../escape", "goal": "g", "total": 1}, client="agent"

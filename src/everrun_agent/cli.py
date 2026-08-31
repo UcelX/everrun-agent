@@ -6,7 +6,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .adapters import install_hooks, uninstall_hooks
-from .attestation import generate_keypair, sign_capsule, verify_capsule_signature
+from .attestation import generate_shared_key, sign_capsule, verify_capsule_signature
 from .capsule import export_capsule, import_capsule
 from .demo import run_crash_recovery_demo
 from .environment import EnvironmentSnapshot, validate_environment
@@ -67,6 +67,12 @@ def parser() -> argparse.ArgumentParser:
     confirm = sub.add_parser("confirm", help="human confirmation of agent-reported state")
     confirm.add_argument("mission_id")
 
+    ticket = sub.add_parser(
+        "confirm-ticket",
+        help="mint a single-use confirmation ticket for an agent to redeem out-of-band",
+    )
+    ticket.add_argument("mission_id")
+
     close = sub.add_parser(
         "close", help="explicit terminal transition, fails closed on unresolved work"
     )
@@ -101,11 +107,23 @@ def parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export", help="write a portable capsule")
     export.add_argument("mission_id")
     export.add_argument("path")
+    export.add_argument(
+        "--redact",
+        action="store_true",
+        help="scrub credential-shaped payloads; produces a share-only, non-importable capsule",
+    )
 
-    load = sub.add_parser("import", help="import a capsule after verification")
+    load = sub.add_parser("import", help="import a capsule after verifying its signature")
     load.add_argument("path")
+    load.add_argument("--key", help="path to the trusted attestation key")
+    load.add_argument("--signer", help="expected signer identity")
+    load.add_argument(
+        "--allow-unsigned",
+        action="store_true",
+        help="accept a capsule with unproven provenance (chain digests are unkeyed)",
+    )
 
-    keygen = sub.add_parser("keygen", help="generate an attestation key")
+    keygen = sub.add_parser("keygen", help="generate a symmetric attestation key")
     keygen.add_argument("--out")
 
     sign = sub.add_parser("sign", help="sign a capsule")
@@ -158,15 +176,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         return EXIT_OK
     if args.command == "keygen":
-        private_key, public_key = generate_keypair()
+        key = generate_shared_key()
         if args.out:
             target = Path(args.out)
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(private_key, encoding="utf-8")
+            target.write_text(key, encoding="utf-8")
             target.chmod(0o600)
             print(str(target))
         else:
-            print(json.dumps({"private_key": private_key, "public_key": public_key}))
+            # M9: v0.1 attestation is symmetric HMAC. Whoever holds this key can
+            # both sign and verify, so it must never be published as a public key.
+            print(json.dumps({"shared_key": key, "algorithm": "hmac-sha256"}))
         return EXIT_OK
     if args.command == "sign":
         print(
@@ -280,6 +300,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(json.dumps({"confirmed": True}))
             return EXIT_OK
+        if args.command == "confirm-ticket":
+            # Printed once, stored only as a hash, redeemable exactly once.
+            print(json.dumps({"ticket": store.issue_confirm_ticket(args.mission_id)}))
+            return EXIT_OK
         if args.command == "close":
             event = store.complete_mission(args.mission_id)
             print(json.dumps({"closed": True, "sequence": event.sequence}))
@@ -338,10 +362,24 @@ def main(argv: list[str] | None = None) -> int:
             )
             return EXIT_OK
         if args.command == "export":
-            print(str(export_capsule(store, args.mission_id, args.path)))
+            print(
+                str(export_capsule(store, args.mission_id, args.path, redact_payloads=args.redact))
+            )
             return EXIT_OK
         if args.command == "import":
-            print(import_capsule(store, args.path))
+            trusted = None
+            if args.key and args.signer:
+                trusted = {args.signer: Path(args.key).read_text(encoding="utf-8").strip()}
+            elif args.key or args.signer:
+                raise SystemExit("--key and --signer must be given together")
+            print(
+                import_capsule(
+                    store,
+                    args.path,
+                    trusted_keys=trusted,
+                    allow_unsigned=args.allow_unsigned,
+                )
+            )
             return EXIT_OK
     return EXIT_ERROR
 

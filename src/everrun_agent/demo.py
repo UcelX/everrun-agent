@@ -36,7 +36,8 @@ def run_crash_recovery_demo(root: str | Path, total: int = 100, crash_at: int = 
         store.create_mission(Mission("demo", "Process unique items", total))
         ledger = ActionLedger(store, "demo")
         for i in range(crash_at):
-            out.open("a").write(f"{i}\n")
+            with out.open("a", encoding="utf-8") as handle:
+                handle.write(f"{i}\n")
             store.append("demo", EventType.WORK_COMPLETED, {"item": str(i)})
         claim = ledger.claim("publish", {"target": "side-effect.txt"})
         effect.write_text("published\n", encoding="utf-8")
@@ -52,7 +53,8 @@ def run_crash_recovery_demo(root: str | Path, total: int = 100, crash_at: int = 
         done = set(state.completed)
         for i in range(total):
             if str(i) not in done:
-                out.open("a").write(f"{i}\n")
+                with out.open("a", encoding="utf-8") as handle:
+                    handle.write(f"{i}\n")
                 store.append("demo", EventType.WORK_COMPLETED, {"item": str(i)})
         lines = out.read_text().splitlines()
         final = StateProjector.project(store.events("demo"))

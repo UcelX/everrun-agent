@@ -1,4 +1,22 @@
-from .models import Decision, Event, EventType, SemanticState
+from .models import Decision, Event, EventType, Origin, SemanticState
+
+
+def unconfirmed_external_progress(events: list[Event]) -> bool:
+    """True when agent-reported progress exists that no LATER confirmation covers.
+
+    H4: a single confirmation used to whitelist every future agent claim, because
+    the check was ``any(REVIEW_CONFIRMED)`` over all history. Confirmation must
+    only vouch for progress recorded before it.
+    """
+
+    last_external = 0
+    last_confirmed = 0
+    for event in events:
+        if event.event_type is EventType.WORK_COMPLETED and event.origin is Origin.EXTERNAL_AGENT:
+            last_external = max(last_external, event.sequence)
+        elif event.event_type is EventType.REVIEW_CONFIRMED:
+            last_confirmed = max(last_confirmed, event.sequence)
+    return last_external > last_confirmed
 
 
 class StateProjector:

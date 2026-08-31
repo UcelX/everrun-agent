@@ -42,7 +42,8 @@ Every row is proven by an executable test in `tests/`. Run all gates with
 | Storage backend contract is explicit | `test_storage_backend_contract_is_explicit` | VERIFIED |
 | Read-only tools need no mutation grant | `test_read_only_tools_are_allowed_without_mutation_grant` | VERIFIED |
 | Mutating tools deny unknown clients | `test_mutating_tools_deny_unknown_clients` | VERIFIED |
-| Confirmation requires separate authority | `test_confirm_requires_separate_authority` | VERIFIED |
+| Confirmation requires separate authority | `test_confirm_requires_separate_authority`, `test_ticket_is_single_use_and_hash_only`, `test_ticket_is_scoped_to_its_mission`, `test_agent_cannot_forge_a_ticket` | VERIFIED |
+| MCP mutation identity is authenticated, not self-asserted | `test_mcp_server_requires_transport_identity_beyond_allowlist`, `test_mcp_server_honours_transport_pinned_allowlist`, `test_transport_pinned_identity_ignores_self_asserted_client`, `test_multiplexed_identity_requires_per_client_token`, `test_json_rpc_forwards_client_token_for_authenticated_identity` | VERIFIED |
 | Tool-reported work is marked external | `test_agent_reported_work_is_marked_external` | VERIFIED |
 | Tool actions refuse duplicate effects | `test_two_phase_action_tools_refuse_duplicate_effects` | VERIFIED |
 | Unknown tool and bad payload fail closed | `test_unknown_tool_and_malformed_payload_fail_closed` | VERIFIED |

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import logging
+import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from hmac import compare_digest
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +13,7 @@ from .ledger import ActionLedger
 from .models import EventType, Mission, Origin, UncertainAction
 from .projection import StateProjector
 from .recovery import recover
-from .store import EverRunStore
+from .store import EverRunStore, validate_mission_id
 
 READ_ONLY_TOOLS = frozenset(
     {"everrun_status", "everrun_resume", "everrun_list_actions", "everrun_briefing"}
@@ -30,6 +33,8 @@ MUTATING_TOOLS = frozenset(
 ALL_TOOLS = READ_ONLY_TOOLS | MUTATING_TOOLS
 CONFIRM_TOOL = "everrun_confirm"
 
+logger = logging.getLogger("everrun_agent.service")
+
 
 class AuthorizationError(RuntimeError):
     pass
@@ -41,6 +46,7 @@ class ToolRequest:
     arguments: dict[str, Any] = field(default_factory=dict)
     client: str = "unknown"
     confirm_token: str | None = None
+    client_token: str | None = None
 
 
 @dataclass(frozen=True)
@@ -59,17 +65,49 @@ class ToolServer:
         db_path: str | Path,
         mutating_clients: tuple[str, ...] | None = None,
         confirm_token: str | None = None,
+        require_confirm_ticket: bool = True,
+        transport_client: str | None = None,
+        client_tokens: dict[str, str] | None = None,
     ) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.mutating_clients = mutating_clients
+        # C3: None used to mean "allow everyone", so a forgotten env var silently
+        # removed all authorization. Deny by default instead.
+        self.mutating_clients: tuple[str, ...] = tuple(mutating_clients or ())
         self.confirm_token = confirm_token
+        # C2: a shared static token that rides the request channel is not a second
+        # authority. A single-use ticket minted out-of-band is.
+        self.require_confirm_ticket = require_confirm_ticket
+        # C2: request-supplied `client` is self-asserted. When the transport already
+        # knows who is connected (one stdio process = one client), pin it here and
+        # the request field is ignored entirely. For multiplexed transports, require
+        # a pre-shared per-client token instead.
+        self.transport_client = transport_client
+        self.client_tokens: dict[str, str] = dict(client_tokens or {})
+
+    def resolve_client(self, request: ToolRequest) -> str:
+        """Return the AUTHENTICATED client identity for a request."""
+
+        if self.transport_client is not None:
+            return self.transport_client
+        if self.client_tokens:
+            presented = request.client_token or ""
+            expected = self.client_tokens.get(request.client)
+            if not expected or not compare_digest(presented, expected):
+                raise AuthorizationError(
+                    f"client identity not proven for: {request.client or 'unknown'}"
+                )
+        return request.client
 
     def _authorize(self, request: ToolRequest) -> None:
+        client = self.resolve_client(request)
         if request.name in MUTATING_TOOLS:
-            if self.mutating_clients is not None and request.client not in self.mutating_clients:
-                raise AuthorizationError(f"client not allowed to mutate: {request.client}")
-            if request.name == CONFIRM_TOOL:
+            if client not in self.mutating_clients:
+                raise AuthorizationError(f"client not allowed to mutate: {client or 'unknown'}")
+            # Ticket mode (default) is checked in the handler, which needs the
+            # store. A static shared token is only honoured when tickets are
+            # explicitly disabled, and it is NOT a second authority (C2).
+            if request.name == CONFIRM_TOOL and not self.require_confirm_ticket:
                 if self.confirm_token is None:
                     raise AuthorizationError("confirmation requires a configured operator token")
                 if request.confirm_token != self.confirm_token:
@@ -81,14 +119,36 @@ class ToolServer:
         self._authorize(request)
         handler = getattr(self, f"_tool_{request.name[len('everrun_') :]}")
         try:
+            mission_id = request.arguments.get("mission_id")
+            if mission_id is not None:
+                validate_mission_id(str(mission_id))
             with EverRunStore(self.db_path) as store:
                 return ToolReply(True, handler(store, request))
+        except AuthorizationError:
+            # Authorization failures must stay loud, never collapse to a generic error.
+            raise
         except KeyError as exc:
             return ToolReply(False, error_code="invalid_arguments", error=str(exc))
         except UncertainAction as exc:
             return ToolReply(False, error_code="uncertain_action", error=str(exc))
         except ValueError as exc:
             return ToolReply(False, error_code="invalid_arguments", error=str(exc))
+        except sqlite3.IntegrityError as exc:
+            # Duplicate mission id, duplicate sequence, and similar constraint hits
+            # are caller mistakes, not internal faults.
+            return ToolReply(False, error_code="invalid_arguments", error=str(exc))
+        except TypeError as exc:
+            return ToolReply(False, error_code="invalid_arguments", error=str(exc))
+        except Exception:
+            # H5: an uncaught exception escaped dispatch_json and terminated the
+            # stdio loop, which was a trivial remote denial of service. Detail stays
+            # in the local log; the caller gets a generic code.
+            logger.exception("tool %s failed", request.name)
+            return ToolReply(
+                False,
+                error_code="internal_error",
+                error="internal error; see the EverRun server log",
+            )
 
     # ---- tools -------------------------------------------------------------
 
@@ -112,6 +172,15 @@ class ToolServer:
         return {"sequence": saved.sequence, "digest": saved.digest}
 
     def _tool_confirm(self, store: EverRunStore, request: ToolRequest) -> dict[str, Any]:
+        ticket = request.arguments.get("ticket") or request.confirm_token
+        if self.require_confirm_ticket:
+            if not ticket:
+                raise AuthorizationError(
+                    "confirmation requires a single-use ticket minted out-of-band with "
+                    "`everrun confirm-ticket <mission_id>`"
+                )
+            if not store.consume_confirm_ticket(str(request.arguments["mission_id"]), str(ticket)):
+                raise AuthorizationError("confirmation ticket is unknown, already used, or expired")
         store.append(
             request.arguments["mission_id"],
             EventType.REVIEW_CONFIRMED,
@@ -200,6 +269,14 @@ class ToolServer:
             return json.dumps(
                 {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "parse error"}}
             )
+        if not isinstance(message, dict):
+            return json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32600, "message": "invalid request"},
+                }
+            )
         message_id = message.get("id")
         method = message.get("method")
         if method == "tools/list":
@@ -221,12 +298,22 @@ class ToolServer:
             params.get("arguments") or {},
             client=str(meta.get("client", "unknown")),
             confirm_token=meta.get("confirm_token"),
+            client_token=meta.get("client_token"),
         )
         try:
             reply = self.handle(request)
         except AuthorizationError as exc:
             return json.dumps(
                 {"jsonrpc": "2.0", "id": message_id, "error": {"code": -32001, "message": str(exc)}}
+            )
+        except Exception:
+            logger.exception("dispatch failed for %s", request.name)
+            return json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": message_id,
+                    "error": {"code": -32603, "message": "internal error"},
+                }
             )
         return json.dumps(
             {
@@ -238,7 +325,8 @@ class ToolServer:
                     "error_code": reply.error_code,
                     "error": reply.error,
                 },
-            }
+            },
+            default=str,
         )
 
 

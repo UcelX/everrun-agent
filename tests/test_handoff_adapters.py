@@ -80,6 +80,8 @@ def test_hook_installer_is_reversible_and_idempotent(tmp_path: Path) -> None:
     second = install_hooks(target, client="claude-code", db_path=tmp_path / "everrun.db")
     assert first == second
     payload = json.loads(target.read_text(encoding="utf-8"))
-    assert payload["hooks"]["claude-code"]["pre_tool_use"].startswith("everrun ")
+    command = payload["hooks"]["claude-code"]["pre_tool_use"]
+    assert isinstance(command, list)
+    assert command[0] == "everrun"
     uninstall_hooks(target, client="claude-code")
     assert json.loads(target.read_text(encoding="utf-8"))["hooks"] == {}

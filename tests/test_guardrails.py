@@ -60,11 +60,22 @@ def test_unclaimed_side_effect_is_refused_before_it_fires(tmp_path: Path) -> Non
 def test_retry_budget_blocks_runaway_attempts(tmp_path: Path) -> None:
     with EverRunStore(tmp_path / "everrun.db") as store:
         store.create_mission(Mission("m1", "budget", 5))
+        # Per-action cap: retrying the SAME action is what a retry budget bounds.
         ledger = ActionLedger(store, "m1", budget=RetryBudget({"flaky": 2}))
-        first = ledger.claim("flaky", {"n": 1})
-        ledger.reconcile(first.key, occurred=False)
-        second = ledger.claim("flaky", {"n": 2})
-        ledger.reconcile(second.key, occurred=False)
+        for _ in range(2):
+            claim = ledger.claim("flaky", {"n": 1})
+            ledger.reconcile(claim.key, occurred=False)
+        with pytest.raises(BudgetExceeded):
+            ledger.claim("flaky", {"n": 1})
+
+
+def test_kind_total_budget_bounds_distinct_actions(tmp_path: Path) -> None:
+    with EverRunStore(tmp_path / "everrun.db") as store:
+        store.create_mission(Mission("m1", "fanout", 5))
+        ledger = ActionLedger(store, "m1", budget=RetryBudget(kind_totals={"flaky": 2}))
+        for index in (1, 2):
+            claim = ledger.claim("flaky", {"n": index})
+            ledger.reconcile(claim.key, occurred=False)
         with pytest.raises(BudgetExceeded):
             ledger.claim("flaky", {"n": 3})
 

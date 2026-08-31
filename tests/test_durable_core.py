@@ -7,6 +7,8 @@ import pytest
 from everrun_agent import EventType, EverRunStore, Mission, StateProjector
 from everrun_agent.environment import EnvironmentSnapshot, validate_environment
 
+from .helpers.tamper import tamper
+
 
 def test_checkpoint_restore_replays_events_after_checkpoint(tmp_path: Path) -> None:
     with EverRunStore(tmp_path / "everrun.db") as store:
@@ -17,7 +19,10 @@ def test_checkpoint_restore_replays_events_after_checkpoint(tmp_path: Path) -> N
         restored = store.restore("m1", checkpoint_sequence=saved.sequence)
         assert restored.checkpoint.sequence == saved.sequence
         assert restored.replayed_events == 2  # checkpoint event + work b
-        assert restored.state.completed == ("a", "b")
+        # state is point-in-time AS OF the checkpoint; current_state is present-time.
+        assert restored.state.completed == ("a",)
+        assert restored.current_state is not None
+        assert restored.current_state.completed == ("a", "b")
 
 
 def test_environment_drift_propagates_to_dependent_facts() -> None:
@@ -54,6 +59,6 @@ def test_schema_version_is_migrated_and_rejected_if_newer(tmp_path: Path) -> Non
     db = tmp_path / "everrun.db"
     with EverRunStore(db) as store:
         assert store.schema_version == 2
-        store.raw_execute("UPDATE metadata SET value='999' WHERE key='schema_version'")
+    tamper(db, "UPDATE metadata SET value='999' WHERE key='schema_version'")
     with pytest.raises(RuntimeError, match="newer schema"):
         EverRunStore(db)

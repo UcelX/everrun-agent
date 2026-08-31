@@ -11,6 +11,7 @@ from everrun_agent.service import serve_stdio
 def test_stdio_loop_serves_requests_and_stops_at_eof(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("EVERRUN_DB", str(tmp_path / "everrun.db"))
     monkeypatch.setenv("EVERRUN_MUTATING_CLIENTS", "agent")
+    monkeypatch.setenv("EVERRUN_TRANSPORT_CLIENT", "agent")
     server = build_server_from_env()
     lines = iter(
         [

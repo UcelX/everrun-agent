@@ -5,6 +5,8 @@ from pathlib import Path
 
 from everrun_agent.cli import EXIT_OK, EXIT_UNSAFE, main
 
+from .helpers.tamper import delete_event
+
 
 def test_full_cli_lifecycle(tmp_path: Path, capsys) -> None:
     db = str(tmp_path / "everrun.db")
@@ -41,14 +43,10 @@ def test_external_agent_work_forces_review_and_confirm_clears_it(tmp_path: Path,
 
 
 def test_corrupt_chain_blocks_status_with_unsafe_exit(tmp_path: Path, capsys) -> None:
-    from everrun_agent import EverRunStore
-
     db = tmp_path / "everrun.db"
     main(["--db", str(db), "init", "m1", "Corrupt", "--total", "1"])
     main(["--db", str(db), "complete-work", "m1", "a"])
-    with EverRunStore(db) as store:
-        store.raw_execute("DROP TRIGGER events_no_delete")
-        store.raw_execute("DELETE FROM events WHERE sequence=2")
+    delete_event(db, "m1", 2)
     assert main(["--db", str(db), "status", "m1", "--json"]) == EXIT_UNSAFE
     assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])["ok"] is False
 

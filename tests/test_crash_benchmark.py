@@ -115,20 +115,25 @@ def test_naive_replay_baseline_does_duplicate_the_side_effect(tmp_path: Path) ->
 def test_tamper_attempts_are_blocked_or_detected(tmp_path: Path) -> None:
     import sqlite3
 
+    import pytest
+
     from everrun_agent import EverRunStore, Mission
+
+    from .helpers.tamper import delete_event, tamper
 
     db = tmp_path / "everrun.db"
     with EverRunStore(db) as store:
         store.create_mission(Mission("m1", "tamper", 2))
         store.append_work("m1", "a")
-        try:
-            store.raw_execute("UPDATE events SET payload='{}' WHERE sequence=2")
-            blocked = False
-        except sqlite3.IntegrityError:
-            blocked = True
-        assert blocked
-        store.raw_execute("DROP TRIGGER events_no_delete")
-        store.raw_execute("DELETE FROM events WHERE sequence=2")
+    # 1. The library refuses to hand out a mutation primitive at all.
+    with EverRunStore(db) as store, pytest.raises(PermissionError):
+        store.raw_execute("UPDATE events SET payload='{}' WHERE sequence=2")
+    # 2. Even a direct SQL connection is blocked by the append-only triggers.
+    with pytest.raises(sqlite3.IntegrityError, match="append-only"):
+        tamper(db, "UPDATE events SET payload='{}' WHERE sequence=2")
+    # 3. Dropping the triggers works, but the hash chain still detects the edit.
+    delete_event(db, "m1", 2)
+    with EverRunStore(db) as store:
         assert not store.verify_chain("m1").ok
 
 

@@ -17,6 +17,15 @@ class HandoffRefused(RuntimeError):
     pass
 
 
+class BriefingTooLarge(RuntimeError):
+    """Raised when the critical sections cannot fit the receiver's budget.
+
+    M6: the briefing used to end with ``briefing[:budget]``, which silently cut
+    away NEXT SAFE ACTION and FORBIDDEN at small budgets, exactly the two
+    sections the README promises are never dropped.
+    """
+
+
 @dataclass(frozen=True)
 class AgentProfile:
     name: str
@@ -67,11 +76,16 @@ def compile_briefing(store: EverRunStore, mission_id: str, profile: AgentProfile
         optional.append("FINDINGS\n" + "\n".join(f"  - {text}" for text in state.findings))
     budget = max(profile.context_tokens * CHARS_PER_TOKEN, 1)
     briefing = "\n\n".join(critical)
+    if len(briefing) > budget:
+        raise BriefingTooLarge(
+            f"critical sections need {len(briefing)} chars but the receiver budget is {budget}; "
+            f"raise context_tokens above {len(briefing) // CHARS_PER_TOKEN + 1}"
+        )
     for section in optional:
         candidate = briefing + "\n\n" + section
         if len(candidate) <= budget:
             briefing = candidate
-    return briefing[:budget]
+    return briefing
 
 
 def handoff(

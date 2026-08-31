@@ -17,16 +17,28 @@ class AttestationError(RuntimeError):
     pass
 
 
-def generate_keypair() -> tuple[str, str]:
-    """Return (private_key, public_key).
+def generate_shared_key() -> str:
+    """Generate a SYMMETRIC attestation key.
 
-    v0.1 ships a symmetric HMAC attestation so the core stays dependency-free.
-    Asymmetric Ed25519 signing is planned for v0.2 behind an optional extra;
-    the verifier contract (signer identity + algorithm + digest) already matches.
+    M9: this is a shared secret, not a keypair. Anyone who can verify a capsule
+    with this key can also forge one. v0.1 ships symmetric HMAC so the core stays
+    dependency-free; asymmetric Ed25519 signing is planned for v0.2 behind an
+    optional extra, and the envelope (signer identity + algorithm + digest)
+    already matches that future format.
     """
 
-    private_key = secrets.token_hex(32)
-    return private_key, private_key
+    return secrets.token_hex(32)
+
+
+def generate_keypair() -> tuple[str, str]:
+    """Deprecated alias kept for compatibility.
+
+    Returns the SAME symmetric key twice. Do not treat the second value as a
+    public key: see generate_shared_key.
+    """
+
+    key = generate_shared_key()
+    return key, key
 
 
 def _signature(body: dict[str, Any], private_key: str) -> str:

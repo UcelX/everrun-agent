@@ -61,7 +61,7 @@ def test_signed_capsule_can_be_imported_after_verification(tmp_path: Path) -> No
     signed = sign_capsule(capsule, private_key, signer="ucel")
     assert verify_capsule_signature(signed, {"ucel": public_key})
     with EverRunStore(tmp_path / "b.db") as target:
-        assert import_capsule(target, signed) == "m1"
+        assert import_capsule(target, signed, trusted_keys={"ucel": public_key}) == "m1"
         assert target.verify_chain("m1").ok
 
 

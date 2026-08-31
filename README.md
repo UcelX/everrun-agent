@@ -116,10 +116,14 @@ The receiving agent gets goal, verified progress, uncertain effects, the next sa
 
 ```bash
 everrun hooks install claude-code
-EVERRUN_MUTATING_CLIENTS=claude-code EVERRUN_CONFIRM_TOKEN=operator-secret everrun-mcp
+EVERRUN_MUTATING_CLIENTS=claude-code \
+EVERRUN_TRANSPORT_CLIENT=claude-code \
+everrun-mcp
+# In a separate operator channel, mint a one-use confirmation ticket:
+everrun confirm-ticket release-1
 ```
 
-Mutating tools deny unknown clients, and a client that reports progress cannot also confirm it.
+Mutating tools deny unknown clients. The request-supplied `_meta.client` field is never sufficient authority: stdio identity must be pinned with `EVERRUN_TRANSPORT_CLIENT`, or multiplexed clients must prove identity through `EVERRUN_CLIENT_TOKENS=client:secret`. Confirmation uses a mission-scoped, hash-only, single-use ticket minted out-of-band; the agent cannot self-confirm with a reusable token.
 
 ## Capsule attestation
 

@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 import sqlite3
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
-from .crypto import canonical, event_digest
+from .crypto import canonical, event_digest, sha256_text
 from .environment import EnvironmentSnapshot
 from .models import (
     ChainReport,
@@ -24,6 +25,7 @@ from .models import (
 )
 
 SCHEMA_VERSION = 2
+MIN_SCHEMA_VERSION = 1
 MISSION_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 MAX_GOAL_CHARS = 8192
 MAX_TOTAL = 10_000_000
@@ -42,11 +44,17 @@ def validate_mission_id(mission_id: str) -> str:
 class EverRunStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        existed = self.path.exists()
         self.conn = sqlite3.connect(self.path, timeout=30)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=FULL")
         self.conn.execute("PRAGMA busy_timeout=30000")
+        self.conn.execute("PRAGMA foreign_keys=ON")
+        if not existed:
+            # L1: mission content is as sensitive as a capsule, which is 0600.
+            with suppress(OSError):
+                self.path.chmod(0o600)
         self._schema()
 
     def _schema(self) -> None:
@@ -57,7 +65,8 @@ class EverRunStore:
             CREATE TABLE IF NOT EXISTS events(mission_id TEXT NOT NULL,sequence INTEGER NOT NULL,event_type TEXT NOT NULL,payload TEXT NOT NULL,created_at TEXT NOT NULL,previous_hash TEXT,digest TEXT NOT NULL,origin TEXT NOT NULL DEFAULT 'deterministic',PRIMARY KEY(mission_id,sequence));
             CREATE TABLE IF NOT EXISTS chain_heads(mission_id TEXT PRIMARY KEY,event_count INTEGER NOT NULL,head_digest TEXT NOT NULL);
             CREATE TABLE IF NOT EXISTS checkpoints(mission_id TEXT NOT NULL,sequence INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL,reason TEXT NOT NULL DEFAULT 'manual',PRIMARY KEY(mission_id,sequence));
-            CREATE TABLE IF NOT EXISTS actions(mission_id TEXT NOT NULL,action_key TEXT NOT NULL,kind TEXT NOT NULL,args TEXT NOT NULL,status TEXT NOT NULL,external_id TEXT,result TEXT,PRIMARY KEY(mission_id,action_key));
+            CREATE TABLE IF NOT EXISTS actions(mission_id TEXT NOT NULL,action_key TEXT NOT NULL,kind TEXT NOT NULL,args TEXT NOT NULL,status TEXT NOT NULL,external_id TEXT,result TEXT,attempts INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(mission_id,action_key));
+            CREATE TABLE IF NOT EXISTS confirm_tickets(mission_id TEXT NOT NULL,ticket_hash TEXT NOT NULL,created_at TEXT NOT NULL,used_at TEXT,PRIMARY KEY(mission_id,ticket_hash));
             CREATE TRIGGER IF NOT EXISTS events_no_update BEFORE UPDATE ON events BEGIN SELECT RAISE(ABORT,'events are append-only'); END;
             CREATE TRIGGER IF NOT EXISTS events_no_delete BEFORE DELETE ON events BEGIN SELECT RAISE(ABORT,'events are append-only'); END;
             CREATE TRIGGER IF NOT EXISTS checkpoints_no_update BEFORE UPDATE ON checkpoints BEGIN SELECT RAISE(ABORT,'checkpoints are immutable'); END;
@@ -69,9 +78,22 @@ class EverRunStore:
             self.conn.execute(
                 "ALTER TABLE checkpoints ADD COLUMN reason TEXT NOT NULL DEFAULT 'manual'"
             )
+        action_columns = {row[1] for row in self.conn.execute("PRAGMA table_info(actions)")}
+        if "attempts" not in action_columns:
+            self.conn.execute("ALTER TABLE actions ADD COLUMN attempts INTEGER NOT NULL DEFAULT 1")
         row = self.conn.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
-        if row and int(row[0]) > SCHEMA_VERSION:
-            raise RuntimeError(f"database uses newer schema {row[0]}")
+        if row is not None:
+            try:
+                found = int(row[0])
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError(f"unreadable schema version: {row[0]!r}") from exc
+            if found > SCHEMA_VERSION:
+                raise RuntimeError(f"database uses newer schema {found}")
+            if found < MIN_SCHEMA_VERSION:
+                raise RuntimeError(
+                    f"database uses unsupported older schema {found}; "
+                    f"minimum is {MIN_SCHEMA_VERSION}"
+                )
         self.conn.execute(
             "INSERT INTO metadata(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (str(SCHEMA_VERSION),),
@@ -183,6 +205,15 @@ class EverRunStore:
             raise ValueError(f"event payload exceeds {MAX_PAYLOAD_CHARS} characters")
         try:
             with self.transaction():
+                # M5: an orphan event permanently poisoned a mission id, because
+                # verify_chain would forever report "missing mission start".
+                if (
+                    typ is not EventType.MISSION_STARTED
+                    and not self.conn.execute(
+                        "SELECT 1 FROM missions WHERE mission_id=?", (mid,)
+                    ).fetchone()
+                ):
+                    raise KeyError(f"unknown mission: {mid}")
                 return self._insert_event(mid, typ, payload, origin)
         except sqlite3.IntegrityError as exc:
             raise ConcurrentWriteError(str(exc)) from exc
@@ -261,11 +292,41 @@ class EverRunStore:
             raise RuntimeError("checkpoint integrity failure")
         all_events = self.events(mission_id)
         replay = [event for event in all_events if event.sequence > saved.sequence]
-        return RestoredMission(saved, StateProjector.project(all_events), len(replay))
+        # M3: ``state`` is the state AS OF the checkpoint sequence, which is what a
+        # checkpoint means. It used to be a projection over ALL events, so a caller
+        # asking for point-in-time state silently got present-time state.
+        # ``current_state`` exposes present-time state for callers that want it.
+        as_of = [event for event in all_events if event.sequence <= saved.sequence]
+        return RestoredMission(
+            saved,
+            StateProjector.project(as_of),
+            len(replay),
+            current_state=StateProjector.project(all_events),
+        )
+
+    def raw_query(self, sql: str, args: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
+        """Read-only escape hatch for inspection and tooling."""
+
+        statement = sql.strip().lstrip("(").lstrip()
+        if not statement[:6].upper() in {"SELECT", "WITH  "} and not statement.upper().startswith(
+            ("SELECT", "WITH", "PRAGMA TABLE_INFO", "EXPLAIN")
+        ):
+            raise PermissionError("raw_query accepts read-only statements only")
+        if ";" in statement.rstrip().rstrip(";"):
+            raise PermissionError("raw_query accepts a single statement only")
+        return self.conn.execute(sql, args).fetchall()
 
     def raw_execute(self, sql: str, args: tuple[Any, ...] = ()) -> None:
-        self.conn.execute(sql, args)
-        self.conn.commit()
+        """Deprecated. Integrity controls are not caller-removable.
+
+        M2: this used to let any caller DROP the append-only triggers, which
+        made immutability a convention rather than a control.
+        """
+
+        raise PermissionError(
+            "raw_execute is disabled: integrity triggers and event rows are not caller-mutable; "
+            "use raw_query for reads or the typed append/checkpoint APIs for writes"
+        )
 
     def append_work(
         self, mission_id: str, item: str, origin: Origin = Origin.DETERMINISTIC
@@ -300,6 +361,46 @@ class EverRunStore:
             mission_id, EventType.ENVIRONMENT_PINNED, {"values": dict(snapshot.values)}
         )
 
+    # ---- out-of-band confirmation tickets ----------------------------------
+
+    def issue_confirm_ticket(self, mission_id: str) -> str:
+        """Mint a single-use confirmation ticket and return it ONCE.
+
+        C2: a confirmation token supplied as a request field travels the same
+        channel as the progress it is meant to vouch for, so one compromised
+        agent process held both authorities. A ticket is minted out-of-band (the
+        operator runs the CLI), stored only as a hash, and consumed exactly once.
+        """
+
+        validate_mission_id(mission_id)
+        self.get_mission(mission_id)
+        ticket = secrets.token_urlsafe(32)
+        with self.transaction():
+            self.conn.execute(
+                "INSERT INTO confirm_tickets(mission_id,ticket_hash,created_at,used_at) "
+                "VALUES(?,?,?,NULL)",
+                (mission_id, sha256_text(ticket), datetime.now(UTC).isoformat()),
+            )
+        return ticket
+
+    def consume_confirm_ticket(self, mission_id: str, ticket: str) -> bool:
+        """Redeem a ticket exactly once. False if unknown or already used."""
+
+        with self.transaction():
+            cursor = self.conn.execute(
+                "UPDATE confirm_tickets SET used_at=? "
+                "WHERE mission_id=? AND ticket_hash=? AND used_at IS NULL",
+                (datetime.now(UTC).isoformat(), mission_id, sha256_text(ticket or "")),
+            )
+            return cursor.rowcount == 1
+
+    def open_confirm_tickets(self, mission_id: str) -> int:
+        row = self.conn.execute(
+            "SELECT COUNT(*) FROM confirm_tickets WHERE mission_id=? AND used_at IS NULL",
+            (mission_id,),
+        ).fetchone()
+        return int(row[0])
+
     def pinned_environment(self, mission_id: str) -> EnvironmentSnapshot | None:
         for event in reversed(self.events(mission_id)):
             if event.event_type is EventType.ENVIRONMENT_PINNED:
@@ -329,7 +430,7 @@ class EverRunStore:
 
         from .contracts import SuccessContract, evaluate_contract
         from .ledger import ActionLedger
-        from .projection import StateProjector
+        from .projection import StateProjector, unconfirmed_external_progress
 
         if not self.verify_chain(mission_id).ok:
             raise ValueError("cannot close a mission whose event chain is not verified")
@@ -337,6 +438,10 @@ class EverRunStore:
         if pending:
             raise ValueError(f"cannot close mission with {len(pending)} unresolved side effect(s)")
         events = self.events(mission_id)
+        if unconfirmed_external_progress(events):
+            raise ValueError(
+                "cannot close mission with unconfirmed agent-reported progress; confirm it first"
+            )
         state = StateProjector.project(events)
         if state.total and len(state.completed) < state.total:
             raise ValueError(

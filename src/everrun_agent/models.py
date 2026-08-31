@@ -30,6 +30,12 @@ class Origin(StrEnum):
     EXTERNAL_AGENT = "external_agent"
 
 
+class ActionStatus(StrEnum):
+    STARTED = "started"
+    COMPLETED = "completed"
+    NOT_OCCURRED = "not_occurred"
+
+
 @dataclass(frozen=True)
 class Mission:
     mission_id: str
@@ -94,6 +100,7 @@ class RestoredMission:
     checkpoint: Checkpoint
     state: SemanticState
     replayed_events: int
+    current_state: SemanticState | None = None
 
 
 class RecoveryMode(StrEnum):
@@ -141,6 +148,15 @@ class ActionClaim:
     fresh: bool
     external_id: str | None = None
     result: dict[str, Any] | None = None
+    status: ActionStatus = ActionStatus.STARTED
+
+    @property
+    def uncertain(self) -> bool:
+        return self.status is ActionStatus.STARTED and not self.fresh
+
+    @property
+    def retryable(self) -> bool:
+        return self.status is ActionStatus.NOT_OCCURRED
 
 
 class HashChainError(RuntimeError):

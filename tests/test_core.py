@@ -17,6 +17,8 @@ from everrun_agent import (
     recover,
 )
 
+from .helpers.tamper import rewrite_event_payload, tamper
+
 
 def test_event_chain_detects_tampering(tmp_path: Path) -> None:
     db = tmp_path / "relay.db"
@@ -24,12 +26,14 @@ def test_event_chain_detects_tampering(tmp_path: Path) -> None:
         store.create_mission(Mission("m1", "Ship safely", 3))
         store.append("m1", EventType.WORK_COMPLETED, {"item": "a"})
         assert store.verify_chain("m1").ok
+        # In-database triggers block an UPDATE even for a direct SQL connection.
         with pytest.raises(sqlite3.IntegrityError, match="append-only"):
-            store.raw_execute(
-                "UPDATE events SET payload = ? WHERE mission_id = ? AND sequence = 2",
-                ('{"item":"evil"}', "m1"),
-            )
+            tamper(db, 'UPDATE events SET payload=\'{"item":"evil"}\' WHERE sequence=2')
         assert store.verify_chain("m1").ok
+    # Dropping the triggers first succeeds, but the hash chain still catches it.
+    rewrite_event_payload(db, "m1", 2)
+    with EverRunStore(db) as store:
+        assert not store.verify_chain("m1").ok
 
 
 def test_projection_rebuilds_semantic_state(tmp_path: Path) -> None:
