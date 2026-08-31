@@ -9,15 +9,56 @@
 </p>
 
 <p align="center">
+  <em>When an agent stops, the mission should not disappear with the transcript.</em>
+</p>
+
+<p align="center">
   <a href="https://github.com/UcelX/everrun-agent/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/UcelX/everrun-agent/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB">
   <img alt="License Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue">
   <img alt="Status alpha" src="https://img.shields.io/badge/status-alpha-orange">
 </p>
 
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#how-recovery-works">How it works</a> ·
+  <a href="#hermes-agent-integration">Hermes integration</a> ·
+  <a href="#security-boundary">Security</a> ·
+  <a href="#limitations">Limitations</a>
+</p>
+
 EverRun Agent is a local durability layer for autonomous agents. It stores mission progress outside the conversation, records external effects before they run, and calculates the safest recovery action after a crash, restart, or handoff.
 
 It is built for work that cannot safely restart from the beginning: deployments, publishing, batch processing, infrastructure changes, payments, and other multi-step operations with real side effects.
+
+> **EverRun is not another agent.** It is the durable mission layer underneath an agent you already run.
+
+## Why EverRun?
+
+| Without durable state | With EverRun |
+|---|---|
+| Progress lives in a fragile transcript | Progress lives in an integrity-checked event store |
+| A timeout makes the last effect ambiguous | The effect becomes explicitly `uncertain` and requires reconciliation |
+| Retry may duplicate a publish, charge, or deploy | Claim-before-fire blocks blind replay |
+| A new session starts from notes or memory | A fresh process discovers the mission and its next safe action |
+| “Done” is inferred from a counter | Completion requires explicit, fail-closed closure |
+
+## What it is for
+
+- Long-running coding-agent tasks that may cross sessions
+- Deployments and infrastructure changes
+- Content production with approval gates
+- Batch processing and data pipelines
+- Payments, notifications, and other external side effects
+- Agent handoff between profiles or processes
+
+## What it is not
+
+- A hosted orchestration platform
+- A replacement for your agent, queue, database, or provider
+- A guarantee that an unknown external system executed exactly once
+- An operating-system sandbox
+- A cloud synchronization service
 
 ## The problem
 
@@ -82,22 +123,37 @@ otherwise           -> continue_work
 
 ## Installation
 
-EverRun requires Python 3.11 or newer.
+EverRun requires Python 3.11 or newer. It is a local library: mission data stays on the machine where the agent runs.
 
-### From source
+### From a checkout
 
 ```bash
 git clone https://github.com/UcelX/everrun-agent.git
 cd everrun-agent
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -e '.[mcp]'
+python -m pip install '.[mcp]'
+```
+
+### For development
+
+```bash
+python -m pip install '.[dev]'
+pytest -q
+```
+
+The `mcp` extra is required only for the native MCP server and Hermes integration. The core library has no runtime dependency.
+
+### Editable development install
+
+```bash
+python -m pip install -e '.[mcp]'
 ```
 
 ### Development environment
 
 ```bash
-pip install -e '.[dev]'
+python -m pip install -e '.[dev]'
 pytest -q
 ruff check src tests scripts
 ruff format --check src tests scripts
