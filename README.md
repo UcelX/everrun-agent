@@ -123,6 +123,8 @@ everrun-mcp
 everrun confirm-ticket release-1
 ```
 
+Install MCP support with `pip install 'everrun-agent[mcp]'`. EverRun speaks native MCP over stdio and has been dogfooded through the Hermes MCP client across three fresh Creator-profile processes: uncertainty forced reconciliation, external progress forced human review, and a completed side effect remained exactly-once.
+
 Mutating tools deny unknown clients. The request-supplied `_meta.client` field is never sufficient authority: stdio identity must be pinned with `EVERRUN_TRANSPORT_CLIENT`, or multiplexed clients must prove identity through `EVERRUN_CLIENT_TOKENS=client:secret`. Confirmation uses a mission-scoped, hash-only, single-use ticket minted out-of-band; the agent cannot self-confirm with a reusable token.
 
 ## Capsule attestation

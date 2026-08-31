@@ -48,6 +48,8 @@ Every row is proven by an executable test in `tests/`. Run all gates with
 | Tool actions refuse duplicate effects | `test_two_phase_action_tools_refuse_duplicate_effects` | VERIFIED |
 | Unknown tool and bad payload fail closed | `test_unknown_tool_and_malformed_payload_fail_closed` | VERIFIED |
 | JSON-RPC and stdio transport work | `test_jsonrpc_dispatch_round_trip`, `test_stdio_loop_serves_requests_and_stops_at_eof` | VERIFIED |
+| Native MCP handshake and tool discovery work | `test_native_mcp_server_exposes_real_tools`; live `hermes -p creator mcp test everrun-dogfood` discovered 11 tools | VERIFIED + DOGFOODED |
+| Cross-process Hermes mission preserves recovery gates | Creator dogfood `creator-dogfood-001`: reconcile → request_review → verified_complete, one side-effect line, chain trusted through sequence 11 | DOGFOODED |
 | Unauthorized JSON-RPC client is rejected | `test_unauthorized_client_is_rejected_over_jsonrpc` | VERIFIED |
 | Adapter claims before firing and records evidence | `test_generic_adapter_claims_before_firing_and_records_evidence` | VERIFIED |
 | Handoff refused while an effect is uncertain | `test_handoff_refuses_while_side_effect_is_uncertain` | VERIFIED |

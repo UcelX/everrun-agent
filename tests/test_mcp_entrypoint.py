@@ -4,7 +4,7 @@ import io
 import json
 from pathlib import Path
 
-from everrun_agent.mcp_server import build_server_from_env
+from everrun_agent.mcp_server import build_mcp_server, build_server_from_env
 from everrun_agent.service import serve_stdio
 
 
@@ -37,6 +37,23 @@ def test_stdio_loop_serves_requests_and_stops_at_eof(tmp_path: Path, monkeypatch
     responses = [json.loads(line) for line in out.getvalue().strip().splitlines()]
     assert responses[0]["result"]["tools"]
     assert responses[1]["result"]["ok"] is True
+
+
+def test_native_mcp_server_exposes_real_tools(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("EVERRUN_DB", str(tmp_path / "everrun.db"))
+    monkeypatch.setenv("EVERRUN_MUTATING_CLIENTS", "agent")
+    monkeypatch.setenv("EVERRUN_TRANSPORT_CLIENT", "agent")
+    mcp = build_mcp_server()
+    names = set(mcp._tool_manager._tools)  # type: ignore[attr-defined]
+    assert {
+        "everrun_start",
+        "everrun_status",
+        "everrun_resume",
+        "everrun_claim_action",
+        "everrun_complete_action",
+        "everrun_reconcile_action",
+        "everrun_close",
+    } <= names
 
 
 def test_unauthorized_client_is_rejected_over_jsonrpc(tmp_path: Path, monkeypatch) -> None:
