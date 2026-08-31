@@ -197,7 +197,7 @@ class ToolServer:
         store.append(
             request.arguments["mission_id"],
             EventType.REVIEW_CONFIRMED,
-            {"confirmed_by": request.client},
+            {"confirmed_by": self.resolve_client(request)},
             origin=Origin.HUMAN,
         )
         return {"confirmed": True}

@@ -89,7 +89,18 @@ def integrate_hermes(
         probe_output = f"{probe.stdout}\n{probe.stderr}"
         match = re.search(r"Tools discovered:\s*(\d+)", probe_output)
         if probe.returncode != 0 or "connected" not in probe_output.lower() or not match:
-            raise RuntimeError(f"EverRun handshake failed: {probe_output.strip()}")
+            rollback = runner(
+                ["hermes", "--profile", profile, "mcp", "remove", "everrun"],
+                check=False,
+                capture_output=True,
+                text=True,
+                input=None,
+            )
+            rollback_output = f"{rollback.stdout}\n{rollback.stderr}".strip()
+            suffix = ""
+            if rollback.returncode != 0:
+                suffix = f"; rollback also failed: {rollback_output}"
+            raise RuntimeError(f"EverRun handshake failed: {probe_output.strip()}{suffix}")
         tools_discovered = int(match.group(1))
     return {
         "changed": completed.returncode == 0,

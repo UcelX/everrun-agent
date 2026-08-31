@@ -23,6 +23,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: {python-version: '3.11'}
-      - run: python -m pip install 'mcp>=2' || true
-      - run: python -m pip install -e '.[mcp]' --dry-run
-        # Resolver must reject MCP 2.x or select a compatible 1.x; pyproject pins >=1,<2.
+      - run: python -m pip install -e '.[mcp]'
+      - run: python -m pip check
+      - name: MCP 2.x must conflict with EverRun's supported MCP 1.x range
+        shell: bash
+        run: |
+          if python -m pip install 'mcp>=2'; then
+            echo "ERROR: MCP 2.x unexpectedly replaced the supported MCP 1.x dependency"
+            exit 1
+          fi
+          exit 0
