@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import everrun_agent.hermes as hermes_integration
 from everrun_agent.hermes import integrate_hermes, plan_hermes_integration
 from everrun_agent.mcp_server import _unwrap
 from everrun_agent.service import ToolReply
@@ -22,7 +23,10 @@ class _Completed:
         self.stderr = stderr
 
 
-def test_integrator_fails_if_hermes_test_returns_zero_but_server_is_missing(tmp_path: Path) -> None:
+def test_integrator_fails_if_hermes_test_returns_zero_but_server_is_missing(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    monkeypatch.setattr(hermes_integration.shutil, "which", lambda _: "/usr/bin/hermes")  # type: ignore[attr-defined]
     calls: list[list[str]] = []
 
     def runner(args: list[str], **_: object) -> _Completed:
@@ -38,7 +42,10 @@ def test_integrator_fails_if_hermes_test_returns_zero_but_server_is_missing(tmp_
     assert calls
 
 
-def test_integrator_uses_noninteractive_enable_all_and_requires_discovery(tmp_path: Path) -> None:
+def test_integrator_uses_noninteractive_enable_all_and_requires_discovery(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    monkeypatch.setattr(hermes_integration.shutil, "which", lambda _: "/usr/bin/hermes")  # type: ignore[attr-defined]
     calls: list[list[str]] = []
 
     def runner(args: list[str], **kwargs: object) -> _Completed:
