@@ -121,7 +121,9 @@ def test_integrator_uses_noninteractive_enable_all_and_requires_discovery(
     policy = skill.read_text(encoding="utf-8")
     assert "description:" in policy
     assert "mcp_everrun_everrun_list_missions" in policy
-    assert skill.stat().st_mode & 0o777 == 0o644
+    assert skill.read_text(encoding="utf-8")
+    if sys.platform != "win32":
+        assert skill.stat().st_mode & 0o777 == 0o644
     add = next(call for call in calls if "add" in call)
     assert add[add.index("--command") + 1] == sys.executable
     env_index = add.index("--env")
