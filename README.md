@@ -156,6 +156,10 @@ everrun verify-capsule mission.rly --key signer.key --signer workstation
 - No dashboard, cloud sync, RBAC, or multi-tenant control plane yet.
 - Capsules are integrity-protected, not encrypted at rest.
 
+## Dogfood status
+
+The first real Hermes Creator-profile run found and fixed a native MCP compatibility defect, then proved three-process recovery through `reconcile -> request_review -> verified_complete` with one external side effect. The remaining release gaps and acceptance gates are tracked in [DOGFOOD.md](DOGFOOD.md). Public beta is intentionally blocked until its P0 items are closed.
+
 ## Roadmap
 
 - v0.2: local mission dashboard with operator approvals, Ed25519 attestation, log compaction

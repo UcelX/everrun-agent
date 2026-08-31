@@ -66,6 +66,18 @@ Every row is proven by an executable test in `tests/`. Run all gates with
 | Naive replay baseline does duplicate | `test_naive_replay_baseline_does_duplicate_the_side_effect` | VERIFIED |
 | Crash demo completes with zero duplicates | `test_crash_demo_end_to_end` | VERIFIED |
 
+## Dogfood release gates
+
+| Gate | Evidence target | Status |
+|---|---|---|
+| Fresh agent discovers blocked mission without supplied id | DF-002 / Run 002 | OPEN P0 |
+| Separate operator approval is usable and replay-safe | DF-003 / Run 002 | OPEN P0 |
+| Real Hermes SIGKILL integration matrix | DF-004 / Run 002 | OPEN P0 |
+| One-command profile-safe Hermes integration | DF-005 / Run 002 | OPEN P0 |
+| Automated machine-readable Hermes dogfood regression | DF-006 / CI | OPEN P0 |
+
+See `DOGFOOD.md` for observed friction, acceptance criteria, and P1/P2 scope. Public beta remains blocked while any P0 row is open.
+
 ## Deliberately out of scope for v0.1
 
 | Item | Status |
