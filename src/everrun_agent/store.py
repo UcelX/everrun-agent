@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
@@ -67,6 +67,7 @@ class EverRunStore:
             CREATE TABLE IF NOT EXISTS checkpoints(mission_id TEXT NOT NULL,sequence INTEGER NOT NULL,payload TEXT NOT NULL,digest TEXT NOT NULL,reason TEXT NOT NULL DEFAULT 'manual',PRIMARY KEY(mission_id,sequence));
             CREATE TABLE IF NOT EXISTS actions(mission_id TEXT NOT NULL,action_key TEXT NOT NULL,kind TEXT NOT NULL,args TEXT NOT NULL,status TEXT NOT NULL,external_id TEXT,result TEXT,attempts INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(mission_id,action_key));
             CREATE TABLE IF NOT EXISTS confirm_tickets(mission_id TEXT NOT NULL,ticket_hash TEXT NOT NULL,created_at TEXT NOT NULL,used_at TEXT,PRIMARY KEY(mission_id,ticket_hash));
+            CREATE TABLE IF NOT EXISTS approval_requests(mission_id TEXT NOT NULL,ticket_hash TEXT NOT NULL,digest TEXT NOT NULL,expires_at TEXT NOT NULL,used_at TEXT,PRIMARY KEY(mission_id,ticket_hash));
             CREATE TRIGGER IF NOT EXISTS events_no_update BEFORE UPDATE ON events BEGIN SELECT RAISE(ABORT,'events are append-only'); END;
             CREATE TRIGGER IF NOT EXISTS events_no_delete BEFORE DELETE ON events BEGIN SELECT RAISE(ABORT,'events are append-only'); END;
             CREATE TRIGGER IF NOT EXISTS checkpoints_no_update BEFORE UPDATE ON checkpoints BEGIN SELECT RAISE(ABORT,'checkpoints are immutable'); END;
@@ -400,6 +401,164 @@ class EverRunStore:
             (mission_id,),
         ).fetchone()
         return int(row[0])
+
+    def list_missions(self, status: str | None = None) -> list[dict[str, Any]]:
+        from .projection import StateProjector
+        from .recovery import recover
+
+        groups = {
+            "active": {"continue", "close_mission"},
+            "blocked": {"reconcile", "halt"},
+            "review-required": {"request_review"},
+            "completed": {"verified_complete"},
+        }
+        if status is not None and status not in groups:
+            raise ValueError("invalid mission status filter")
+        result: list[dict[str, Any]] = []
+        query = "SELECT m.*,MAX(e.created_at) updated_at FROM missions m JOIN events e USING(mission_id) GROUP BY m.mission_id ORDER BY updated_at DESC,m.mission_id"
+        for row in self.conn.execute(query):
+            mid = str(row["mission_id"])
+            state, decision = StateProjector.project(self.events(mid)), recover(self, mid)
+            if status is not None and decision.mode.value not in groups[status]:
+                continue
+            result.append(
+                {
+                    "mission_id": mid,
+                    "goal": state.goal,
+                    "mode": decision.mode.value,
+                    "completed": len(state.completed),
+                    "total": state.total,
+                    "next_safe_action": decision.next_safe_action,
+                    "updated_at": row["updated_at"],
+                }
+            )
+        return result
+
+    def inspect_mission(self, mission_id: str, last_events: int = 5) -> dict[str, Any]:
+        from .ledger import ActionLedger
+        from .projection import StateProjector, unconfirmed_external_progress
+        from .recovery import recover
+
+        events = self.events(mission_id)
+        state, chain, decision = (
+            StateProjector.project(events),
+            self.verify_chain(mission_id),
+            recover(self, mission_id),
+        )
+        checkpoint = self.conn.execute(
+            "SELECT sequence,reason FROM checkpoints WHERE mission_id=? ORDER BY sequence DESC LIMIT 1",
+            (mission_id,),
+        ).fetchone()
+        actions = [
+            dict(row)
+            for row in self.conn.execute(
+                "SELECT action_key,kind,status,external_id,attempts FROM actions WHERE mission_id=?",
+                (mission_id,),
+            )
+        ]
+        confirmed = max(
+            (e.sequence for e in events if e.event_type is EventType.REVIEW_CONFIRMED), default=None
+        )
+        return {
+            "mission_id": mission_id,
+            "goal": state.goal,
+            "progress": {"completed": len(state.completed), "total": state.total},
+            "mode": decision.mode.value,
+            "safe": decision.safe,
+            "next_safe_action": decision.next_safe_action,
+            "chain": {
+                "ok": chain.ok,
+                "trusted_through": chain.trusted_through,
+                "error": chain.error,
+            },
+            "event_count": len(events),
+            "updated_at": events[-1].created_at,
+            "checkpoint": dict(checkpoint) if checkpoint else None,
+            "actions": actions,
+            "unresolved_action_count": len(ActionLedger(self, mission_id).uncertain_details()),
+            "confirmation": {
+                "required": unconfirmed_external_progress(events),
+                "covered_through": confirmed,
+            },
+            "last_events": [
+                {
+                    "sequence": e.sequence,
+                    "type": e.event_type.value,
+                    "created_at": e.created_at,
+                    "origin": e.origin.value,
+                }
+                for e in events[-max(0, min(last_events, 20)) :]
+            ],
+        }
+
+    def request_approval_digest(self, mission_id: str) -> str:
+        report = self.inspect_mission(mission_id)
+        return sha256_text(
+            canonical(
+                {
+                    "mission_id": mission_id,
+                    "progress": report["progress"],
+                    "event_count": report["event_count"],
+                    "head": report["chain"]["trusted_through"],
+                }
+            )
+        )
+
+    def request_approval(self, mission_id: str, ttl_seconds: int = 300) -> dict[str, Any]:
+        if not 1 <= ttl_seconds <= 3600:
+            raise ValueError("approval ttl must be between 1 and 3600 seconds")
+        report = self.inspect_mission(mission_id)
+        if report["mode"] != "request_review":
+            raise ValueError("mission is not awaiting operator review")
+        ticket, digest = secrets.token_urlsafe(32), self.request_approval_digest(mission_id)
+        expires = (datetime.now(UTC) + timedelta(seconds=ttl_seconds)).isoformat()
+        with self.transaction():
+            self.conn.execute(
+                "INSERT INTO approval_requests VALUES(?,?,?,?,NULL)",
+                (mission_id, sha256_text(ticket), digest, expires),
+            )
+        return {
+            "mission_id": mission_id,
+            "mode": report["mode"],
+            "progress": report["progress"],
+            "pending_risks": report["unresolved_action_count"],
+            "digest": digest,
+            "expires_at": expires,
+            "ticket": ticket,
+        }
+
+    def approve_with_ticket(
+        self, mission_id: str, ticket: str, digest: str, operator: str
+    ) -> dict[str, Any]:
+        from .recovery import recover
+
+        row = self.conn.execute(
+            "SELECT * FROM approval_requests WHERE mission_id=? AND ticket_hash=?",
+            (mission_id, sha256_text(ticket or "")),
+        ).fetchone()
+        if (
+            not row
+            or row["used_at"] is not None
+            or datetime.fromisoformat(row["expires_at"]) <= datetime.now(UTC)
+        ):
+            raise ValueError("approval ticket used, expired, or unknown")
+        if digest != row["digest"] or self.request_approval_digest(mission_id) != digest:
+            raise ValueError("mission state changed after approval request")
+        with self.transaction():
+            cursor = self.conn.execute(
+                "UPDATE approval_requests SET used_at=? WHERE mission_id=? AND ticket_hash=? AND used_at IS NULL",
+                (datetime.now(UTC).isoformat(), mission_id, sha256_text(ticket)),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("approval ticket used, expired, or unknown")
+            self._insert_event(
+                mission_id, EventType.REVIEW_CONFIRMED, {"confirmed_by": operator}, Origin.HUMAN
+            )
+        return {
+            "approved": True,
+            "mission_id": mission_id,
+            "next_safe_action": recover(self, mission_id).next_safe_action,
+        }
 
     def pinned_environment(self, mission_id: str) -> EnvironmentSnapshot | None:
         for event in reversed(self.events(mission_id)):

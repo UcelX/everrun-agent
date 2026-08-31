@@ -70,13 +70,13 @@ Every row is proven by an executable test in `tests/`. Run all gates with
 
 | Gate | Evidence target | Status |
 |---|---|---|
-| Fresh agent discovers blocked mission without supplied id | DF-002 / Run 002 | OPEN P0 |
-| Separate operator approval is usable and replay-safe | DF-003 / Run 002 | OPEN P0 |
-| Real Hermes SIGKILL integration matrix | DF-004 / Run 002 | OPEN P0 |
-| One-command profile-safe Hermes integration | DF-005 / Run 002 | OPEN P0 |
-| Automated machine-readable Hermes dogfood regression | DF-006 / CI | OPEN P0 |
+| Fresh agent discovers blocked mission without supplied id | `test_fresh_agent_discovers_blocked_mission_without_id`; live Run 002 | VERIFIED |
+| Separate operator approval is usable and replay-safe | `test_operator_approval_request_is_digest_bound_and_replay_safe`; live replay refusal | VERIFIED |
+| Real Hermes SIGKILL integration | Run 002 `literal-sigkill-005`, process exit `-9`, marker count 1, valid chain | VERIFIED LIVE |
+| One-command profile-safe Hermes integration | integrator regression tests; Creator discovered 13 tools and mutation succeeded | VERIFIED LIVE |
+| Automated machine-readable Hermes dogfood regression | `test_protocol_fallback_dogfood_transitions_once_and_valid_chain` | VERIFIED |
 
-See `DOGFOOD.md` for observed friction, acceptance criteria, and P1/P2 scope. Public beta remains blocked while any P0 row is open.
+See `DOGFOOD.md` for observed friction, live acceptance evidence, and remaining P1/P2 soak scope. All P0 rows are closed; public visibility remains an explicit operator decision.
 
 ## Deliberately out of scope for v0.1
 

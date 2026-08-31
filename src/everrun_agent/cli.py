@@ -11,6 +11,7 @@ from .capsule import export_capsule, import_capsule
 from .demo import run_crash_recovery_demo
 from .environment import EnvironmentSnapshot, validate_environment
 from .handoff import AgentProfile, compile_briefing, handoff
+from .hermes import integrate_hermes
 from .ledger import ActionLedger
 from .models import EventType, Mission, Origin
 from .projection import StateProjector
@@ -72,6 +73,30 @@ def parser() -> argparse.ArgumentParser:
         help="mint a single-use confirmation ticket for an agent to redeem out-of-band",
     )
     ticket.add_argument("mission_id")
+
+    approval = sub.add_parser(
+        "approval-request", help="operator-only digest-bound approval request"
+    )
+    approval.add_argument("mission_id")
+    approval.add_argument("--ttl", type=int, default=300)
+    approve = sub.add_parser("approve", help="redeem an operator approval ticket")
+    approve.add_argument("mission_id")
+    approve.add_argument("ticket")
+    approve.add_argument("digest")
+    approve.add_argument("--operator", default="cli-operator")
+
+    missions = sub.add_parser("list-missions", help="discover durable missions")
+    missions.add_argument("--status", choices=("active", "blocked", "review-required", "completed"))
+    missions.add_argument("--json", action="store_true")
+    inspect = sub.add_parser("inspect", help="combined secret-safe operator view")
+    inspect.add_argument("mission_id")
+    inspect.add_argument("--json", action="store_true")
+
+    integrate = sub.add_parser("integrate", help="integrate with an agent client")
+    integrate.add_argument("client", choices=("hermes",))
+    integrate.add_argument("--profile", default="default")
+    integrate.add_argument("--dry-run", action="store_true")
+    integrate.add_argument("--uninstall", action="store_true")
 
     close = sub.add_parser(
         "close", help="explicit terminal transition, fails closed on unresolved work"
@@ -202,6 +227,14 @@ def main(argv: list[str] | None = None) -> int:
         verify_capsule_signature(args.path, {args.signer: key})
         print(json.dumps({"verified": True, "signer": args.signer}))
         return EXIT_OK
+    if args.command == "integrate":
+        print(
+            json.dumps(
+                integrate_hermes(args.profile, dry_run=args.dry_run, uninstall=args.uninstall),
+                sort_keys=True,
+            )
+        )
+        return EXIT_OK
     if args.command == "hooks":
         config = Path(args.config)
         db = Path(args.db)
@@ -215,6 +248,35 @@ def main(argv: list[str] | None = None) -> int:
     db = Path(args.db)
     db.parent.mkdir(parents=True, exist_ok=True)
     with EverRunStore(db) as store:
+        if args.command == "list-missions":
+            rows = store.list_missions(args.status)
+            _emit(
+                {"missions": rows},
+                args.json,
+                "\n".join(row["mission_id"] for row in rows) or "none",
+            )
+            return EXIT_OK
+        if args.command == "inspect":
+            inspect_report = store.inspect_mission(args.mission_id)
+            _emit(
+                inspect_report,
+                args.json,
+                f"{args.mission_id}: {inspect_report['mode']} events={inspect_report['event_count']}",
+            )
+            return EXIT_OK if inspect_report["chain"]["ok"] else EXIT_UNSAFE
+        if args.command == "approval-request":
+            print(json.dumps(store.request_approval(args.mission_id, args.ttl), sort_keys=True))
+            return EXIT_OK
+        if args.command == "approve":
+            print(
+                json.dumps(
+                    store.approve_with_ticket(
+                        args.mission_id, args.ticket, args.digest, args.operator
+                    ),
+                    sort_keys=True,
+                )
+            )
+            return EXIT_OK
         if args.command == "init":
             store.create_mission(Mission(args.mission_id, args.goal, args.total))
             print(args.mission_id)

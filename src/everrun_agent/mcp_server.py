@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sys
 from typing import Any
@@ -48,7 +49,14 @@ def build_server_from_env() -> ToolServer:
 def _unwrap(reply: ToolReply) -> dict[str, Any]:
     if not reply.ok:
         raise ValueError(
-            f"{reply.error_code or 'everrun_error'}: {reply.error or 'operation failed'}"
+            json.dumps(
+                {
+                    "code": reply.error_code or "everrun_error",
+                    "message": reply.error or "operation failed",
+                    "recovery": reply.recovery,
+                },
+                sort_keys=True,
+            )
         )
     return reply.data
 
@@ -139,6 +147,16 @@ def build_mcp_server() -> Any:
     def list_actions(mission_id: str) -> dict[str, Any]:
         """List unresolved external effects for a mission."""
         return call("everrun_list_actions", {"mission_id": mission_id})
+
+    @mcp.tool(name="everrun_list_missions")
+    def list_missions(status: str | None = None) -> dict[str, Any]:
+        """Discover missions by active, blocked, review-required, or completed state."""
+        return call("everrun_list_missions", {"status": status})
+
+    @mcp.tool(name="everrun_inspect")
+    def inspect(mission_id: str) -> dict[str, Any]:
+        """Return a secret-safe combined operator inspection report."""
+        return call("everrun_inspect", {"mission_id": mission_id})
 
     @mcp.tool(name="everrun_status")
     def status(mission_id: str) -> dict[str, Any]:

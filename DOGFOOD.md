@@ -167,20 +167,34 @@ with a clear compatibility message; never silently install an incompatible major
 - Log compaction/archival
 - Team RBAC and multi-tenant control plane
 
+## Implementation traceability (Run 002 engineering)
+
+| Item | Status | Proof |
+|---|---|---|
+| DF-002 mission discovery | IMPLEMENTED | `test_fresh_agent_discovers_blocked_mission_without_id`, `test_mcp_list_missions_is_read_only_and_needs_no_mission_id` |
+| DF-003 operator approval | IMPLEMENTED | `test_operator_approval_request_is_digest_bound_and_replay_safe`, `test_approval_rejects_state_changed_after_request` |
+| DF-004 real Hermes SIGKILL | VERIFIED LIVE | Creator mission `literal-sigkill-005`: literal process exit `-9`; fresh process discovered it without an id, reconciled the one existing marker without replay, chain valid, approval replay refused, final `verified_complete` |
+| DF-005 Hermes integrator | IMPLEMENTED | `test_hermes_dry_run_is_profile_local_and_non_mutating`; `everrun integrate hermes` |
+| DF-006 automated dogfood | IMPLEMENTED | `test_protocol_fallback_dogfood_transitions_once_and_valid_chain`; `scripts/dogfood_harness.py` |
+| DF-007 inspect | IMPLEMENTED | `test_inspect_combines_integrity_checkpoint_review_and_actions` |
+| DF-008 lifecycle policy | IMPLEMENTED | `integrations/hermes/SKILL.md` |
+| DF-009 structured errors | IMPLEMENTED | `test_mcp_error_preserves_structured_recovery_data` |
+| DF-010 compatibility | IMPLEMENTED | `test_mcp_dependency_is_pinned_to_supported_major`; `.github/workflows/ci.yml` |
+
 ## Public-release decision
 
-**Current verdict: NOT READY FOR PUBLIC BETA.**
+**Current verdict: ALL P0 ENGINEERING AND LIVE ACCEPTANCE GATES PASSED; KEEP PRIVATE FOR FINAL SOAK.**
 
-The durable kernel and native Hermes path work, but public beta remains gated on P0 items DF-002
-through DF-006. Private dogfood may continue. A second dogfood run must begin without supplying a
-mission id and must include an actual Hermes SIGKILL boundary.
+The durable kernel, native MCP path, discovery, operator approval, profile-safe integration, automated fallback harness, and literal Hermes SIGKILL recovery have all passed. The repository remains private for a final soak period and cross-platform CI before any public-release decision.
 
-## Next run
+## Run 002 result
 
-Run 002 should validate:
+1. One-command Creator integration exposed 13 tools and was profile-local (`0700`).
+2. Fresh recovery discovered the blocked mission without a supplied id.
+3. The parent Hermes process was killed with literal `SIGKILL`; observed exit code was `-9`.
+4. The already-fired effect remained exactly one line and was reconciled, never replayed.
+5. Digest-bound separate operator approval succeeded; replaying its ticket was refused.
+6. Final mode was `verified_complete`, `safe=true`, with a valid event chain.
+7. The deterministic protocol fallback is executable in CI through `scripts/dogfood_harness.py`.
 
-1. one-command Creator-profile integration on a clean config snapshot;
-2. mission discovery without a supplied id;
-3. actual SIGKILL after effect claim and after effect execution;
-4. separate operator approval with one-use ticket replay refusal;
-5. machine-readable end-to-end report suitable for CI.
+Live integration also found and fixed four defects: private JSON-RPC instead of MCP, false-positive handshake verification, command/args serialization, and repeated `--env` serialization dropping the mutation allowlist.

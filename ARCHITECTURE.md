@@ -72,7 +72,7 @@ The most cautious applicable signal wins, so evaluation order can never produce 
 | Credential leakage | Redaction in evidence, capsules carry no secrets, `0600` files |
 | SSRF via verifier | Scheme allowlist, private and metadata refusal, redirect revalidation |
 | Arbitrary command execution | Executable allowlist, clean environment, timeout, bounded output |
-|| Unauthorized tool mutation | Deny-by-default mutation, transport-pinned or per-client-token identity, and one-use out-of-band confirmation tickets |
+|| Unauthorized tool mutation | Deny-by-default mutation, transport-pinned or per-client-token identity, and digest-bound one-use out-of-band approval tickets |
 | Forged portable state | Capsule digest plus signer attestation, transactional import |
 
 ## Modification rules

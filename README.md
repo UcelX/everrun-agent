@@ -158,7 +158,7 @@ everrun verify-capsule mission.rly --key signer.key --signer workstation
 
 ## Dogfood status
 
-The first real Hermes Creator-profile run found and fixed a native MCP compatibility defect, then proved three-process recovery through `reconcile -> request_review -> verified_complete` with one external side effect. The remaining release gaps and acceptance gates are tracked in [DOGFOOD.md](DOGFOOD.md). Public beta is intentionally blocked until its P0 items are closed.
+Two real Hermes Creator-profile runs now prove the integration. Run 001 found and fixed native MCP compatibility. Run 002 used the one-command integrator, discovered a blocked mission without an id after literal `SIGKILL` (exit `-9`), reconciled an already-fired effect without replay, rejected approval-ticket reuse, and reached `verified_complete`. Detailed evidence and remaining soak/compatibility work are tracked in [DOGFOOD.md](DOGFOOD.md).
 
 ## Roadmap
 

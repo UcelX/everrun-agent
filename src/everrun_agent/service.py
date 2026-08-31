@@ -16,7 +16,14 @@ from .recovery import recover
 from .store import EverRunStore, validate_mission_id
 
 READ_ONLY_TOOLS = frozenset(
-    {"everrun_status", "everrun_resume", "everrun_list_actions", "everrun_briefing"}
+    {
+        "everrun_status",
+        "everrun_resume",
+        "everrun_list_actions",
+        "everrun_briefing",
+        "everrun_list_missions",
+        "everrun_inspect",
+    }
 )
 MUTATING_TOOLS = frozenset(
     {
@@ -55,6 +62,7 @@ class ToolReply:
     data: dict[str, Any] = field(default_factory=dict)
     error_code: str | None = None
     error: str | None = None
+    recovery: dict[str, Any] = field(default_factory=dict)
 
 
 class ToolServer:
@@ -130,7 +138,12 @@ class ToolServer:
         except KeyError as exc:
             return ToolReply(False, error_code="invalid_arguments", error=str(exc))
         except UncertainAction as exc:
-            return ToolReply(False, error_code="uncertain_action", error=str(exc))
+            return ToolReply(
+                False,
+                error_code="uncertain_action",
+                error=str(exc),
+                recovery={"next_safe_action": "reconcile the action authoritatively"},
+            )
         except ValueError as exc:
             return ToolReply(False, error_code="invalid_arguments", error=str(exc))
         except sqlite3.IntegrityError as exc:
@@ -215,6 +228,12 @@ class ToolServer:
     def _tool_list_actions(self, store: EverRunStore, request: ToolRequest) -> dict[str, Any]:
         ledger = ActionLedger(store, request.arguments["mission_id"])
         return {"uncertain": ledger.uncertain_details()}
+
+    def _tool_list_missions(self, store: EverRunStore, request: ToolRequest) -> dict[str, Any]:
+        return {"missions": store.list_missions(request.arguments.get("status"))}
+
+    def _tool_inspect(self, store: EverRunStore, request: ToolRequest) -> dict[str, Any]:
+        return store.inspect_mission(request.arguments["mission_id"])
 
     def _tool_status(self, store: EverRunStore, request: ToolRequest) -> dict[str, Any]:
         mission_id = request.arguments["mission_id"]
@@ -324,6 +343,7 @@ class ToolServer:
                     "data": reply.data,
                     "error_code": reply.error_code,
                     "error": reply.error,
+                    "recovery": reply.recovery,
                 },
             },
             default=str,
