@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -18,6 +19,16 @@ class IntegrationPlan:
     db: str
     command: tuple[str, ...]
     env: dict[str, str]
+    skill: str
+
+
+def lifecycle_skill_text() -> str:
+    resource = Path(__file__).parent / "integrations" / "hermes" / "SKILL.md"
+    return resource.read_text(encoding="utf-8")
+
+
+def _skill_digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def plan_hermes_integration(profile: str, hermes_home: Path | None = None) -> IntegrationPlan:
@@ -30,6 +41,7 @@ def plan_hermes_integration(profile: str, hermes_home: Path | None = None) -> In
     home = hermes_home or Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
     profile_home = home if profile == "default" else home / "profiles" / profile
     state = profile_home / "everrun"
+    skill = profile_home / "skills" / "autonomous-ai-agents" / "everrun-lifecycle" / "SKILL.md"
     return IntegrationPlan(
         profile,
         str(state),
@@ -40,6 +52,7 @@ def plan_hermes_integration(profile: str, hermes_home: Path | None = None) -> In
             "EVERRUN_MUTATING_CLIENTS": "hermes",
             "EVERRUN_TRANSPORT_CLIENT": "hermes",
         },
+        str(skill),
     )
 
 
@@ -58,6 +71,7 @@ def integrate_hermes(
     if shutil.which("hermes") is None:
         raise RuntimeError("Hermes CLI not found; install Hermes before integration")
     state = Path(plan.state_dir)
+    skill = Path(plan.skill)
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     state.chmod(0o700)
     args = ["hermes", "--profile", profile, "mcp", "remove" if uninstall else "add", "everrun"]
@@ -78,6 +92,19 @@ def integrate_hermes(
         raise RuntimeError(f"Hermes MCP configuration failed: {combined.strip()}")
     if not uninstall and "saved 'everrun'" not in combined.lower():
         raise RuntimeError(f"Hermes MCP configuration was not saved: {combined.strip()}")
+    skill_preserved = False
+    policy = lifecycle_skill_text()
+    if uninstall:
+        if skill.exists() and _skill_digest(skill.read_text(encoding="utf-8")) == _skill_digest(
+            policy
+        ):
+            skill.unlink()
+        elif skill.exists():
+            skill_preserved = True
+    else:
+        skill.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
+        skill.write_text(policy, encoding="utf-8")
+        skill.chmod(0o644)
     tools_discovered = 0
     if not uninstall:
         probe = runner(
@@ -109,6 +136,8 @@ def integrate_hermes(
         "state_dir": str(state),
         "verified": not uninstall,
         "tools_discovered": tools_discovered,
+        "skill": str(skill),
+        "skill_preserved": skill_preserved,
     }
 
 

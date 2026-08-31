@@ -64,7 +64,8 @@ Every row is proven by an executable test in `tests/`. Run all gates with
 | Hard kill leaves no duplicate work or effects | `test_hard_kill_recovery_has_no_duplicate_work_or_effects` | VERIFIED |
 | Fault injection never yields unsafe resume | `test_fault_injection_matrix_never_yields_unsafe_resume` | VERIFIED |
 | Naive replay baseline does duplicate | `test_naive_replay_baseline_does_duplicate_the_side_effect` | VERIFIED |
-| Crash demo completes with zero duplicates | `test_crash_demo_end_to_end` | VERIFIED |
+| Crash demo completes with zero duplicates | `test_crash_demo_end_to_end`, `test_cli_demo_accepts_root_alias_and_explicit_json` | VERIFIED |
+| Clean-installed MCP CLI exposes help without starting the server | `test_mcp_cli_help_does_not_start_server` | VERIFIED |
 
 ## Dogfood release gates
 
@@ -73,7 +74,9 @@ Every row is proven by an executable test in `tests/`. Run all gates with
 | Fresh agent discovers blocked mission without supplied id | `test_fresh_agent_discovers_blocked_mission_without_id`; live Run 002 | VERIFIED |
 | Separate operator approval is usable and replay-safe | `test_operator_approval_request_is_digest_bound_and_replay_safe`; live replay refusal | VERIFIED |
 | Real Hermes SIGKILL integration | Run 002 `literal-sigkill-005`, process exit `-9`, marker count 1, valid chain | VERIFIED LIVE |
-| One-command profile-safe Hermes integration | integrator regression tests; Creator discovered 13 tools and mutation succeeded | VERIFIED LIVE |
+| One-command profile-safe Hermes integration | `test_integrator_uses_noninteractive_enable_all_and_requires_discovery`; Creator discovered 13 tools and mutation succeeded | VERIFIED LIVE |
+| Hermes integration installs lifecycle policy automatically | `test_hermes_dry_run_is_profile_local_and_non_mutating`, `test_lifecycle_policy_uses_native_tool_names_and_requires_natural_discovery`, natural Creator dogfood mission `ucel-everrun-lifecycle-natural-draft` | VERIFIED LIVE |
+| Hermes uninstall removes only unchanged EverRun-owned policy | `test_hermes_uninstall_removes_only_everrun_owned_skill`, `test_hermes_uninstall_preserves_user_modified_skill` | VERIFIED |
 | Automated machine-readable Hermes dogfood regression | `test_protocol_fallback_dogfood_transitions_once_and_valid_chain` | VERIFIED |
 
 See `DOGFOOD.md` for observed friction, live acceptance evidence, and remaining P1/P2 soak scope. All P0 rows are closed; public visibility remains an explicit operator decision.

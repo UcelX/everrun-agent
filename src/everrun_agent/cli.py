@@ -167,9 +167,10 @@ def parser() -> argparse.ArgumentParser:
     hooks.add_argument("--config", default=".everrun/hooks.json")
 
     demo = sub.add_parser("demo", help="run the crash-recovery proof")
-    demo.add_argument("--workdir", default="everrun-demo")
+    demo.add_argument("--workdir", "--root", dest="workdir", default="everrun-demo")
     demo.add_argument("--total", type=int, default=100)
     demo.add_argument("--crash-at", type=int, default=40)
+    demo.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     return root
 
 

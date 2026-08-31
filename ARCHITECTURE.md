@@ -42,7 +42,8 @@ CLI  ·  MCP / JSON-RPC tools  ·  Adapters and lifecycle hooks
 | `handoff.py` | Briefing compiler and cross-agent authority transfer |
 | `adapters.py` | Generic in-process facade and hook installers |
 | `service.py` | Deny-by-default tool surface plus JSON-RPC and stdio |
-|| `mcp_server.py` | Native MCP stdio entrypoint exposing the authenticated EverRun tool surface |
+| `hermes.py` | Profile-local Hermes MCP plus lifecycle-skill installer; uninstall preserves user-modified policy |
+| `mcp_server.py` | Native MCP stdio entrypoint exposing the authenticated EverRun tool surface |
 | `capsule.py` | Portable export and transactional import |
 | `attestation.py` | Capsule signing and signer verification |
 | `storage.py` | Backend protocol for future databases |

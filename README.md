@@ -168,7 +168,7 @@ For another Hermes profile:
 everrun integrate hermes --profile creator
 ```
 
-The installer creates profile-local state, pins the authenticated stdio identity, registers all 13 MCP tools, tests the handshake, and rolls back partial configuration if verification fails.
+The installer creates profile-local state, pins the authenticated stdio identity, registers all 13 MCP tools, installs the `everrun-lifecycle` policy skill, tests the handshake, and rolls back partial MCP configuration if verification fails. The skill makes normal multi-step prompts discover/start/checkpoint automatically; users do not need to dictate EverRun tool names.
 
 Useful integration commands:
 
@@ -176,7 +176,7 @@ Useful integration commands:
 # Preview without changing Hermes
 everrun integrate hermes --profile creator --dry-run
 
-# Remove only the EverRun MCP entry
+# Remove the EverRun MCP entry and unchanged EverRun-owned lifecycle skill
 everrun integrate hermes --profile creator --uninstall
 ```
 
@@ -260,7 +260,7 @@ Unsigned imports are rejected by default. A redacted export is safe to share but
 Run the deterministic crash-recovery demo:
 
 ```bash
-everrun demo --workdir /tmp/everrun-demo --total 100 --crash-at 40
+everrun demo --root /tmp/everrun-demo --total 100 --crash-at 40 --json
 ```
 
 Expected invariants:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -181,7 +182,9 @@ def build_mcp_server() -> Any:
     return mcp
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="EverRun Agent MCP stdio server")
+    parser.parse_args(argv)
     build_mcp_server().run(transport="stdio")
     return 0
 

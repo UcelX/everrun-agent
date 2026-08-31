@@ -42,7 +42,10 @@ Homepage = "https://github.com/UcelX/everrun-agent"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/everrun_agent"]
-artifacts = ["src/everrun_agent/py.typed"]
+artifacts = [
+  "src/everrun_agent/py.typed",
+  "src/everrun_agent/integrations/hermes/SKILL.md",
+]
 
 [tool.hatch.build.targets.sdist]
 exclude = [".venv", "dist", "build", ".mypy_cache", ".pytest_cache", ".ruff_cache"]

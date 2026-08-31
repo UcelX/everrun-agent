@@ -198,3 +198,32 @@ The durable kernel, native MCP path, discovery, operator approval, profile-safe 
 7. The deterministic protocol fallback is executable in CI through `scripts/dogfood_harness.py`.
 
 Live integration also found and fixed four defects: private JSON-RPC instead of MCP, false-positive handshake verification, command/args serialization, and repeated `--env` serialization dropping the mutation allowlist.
+
+## Run 003: natural Creator lifecycle policy
+
+- Date: 2026-08-31
+- Mission: `ucel-everrun-lifecycle-natural-draft`
+- Prompt: ordinary multi-step content request; no EverRun tool names or call ordering
+- Interruption: first Creator process was killed after source brief creation
+- Recovery: a fresh process discovered the mission from EverRun state, not from the old transcript
+- Result: four verified local artifacts, checkpoint sealed at source sequence 5, `request_review`, no public action
+
+### Defects found and fixed
+
+#### DF-011: lifecycle skill used non-native tool names — FIXED
+
+**Observed:** Creator produced a draft but did not create an EverRun mission.
+
+**Root cause:** the policy named server tools as `everrun_*`; Hermes exposes native MCP tools as `mcp_everrun_everrun_*`.
+
+**Fix:** canonical policy now uses native names and explicitly requires automatic discovery without waiting for user instructions.
+
+#### DF-012: one-command Hermes integration omitted lifecycle policy — FIXED
+
+**Observed:** `everrun integrate hermes` installed 13 tools but a newly integrated agent had no policy telling it to use them.
+
+**Fix:** the wheel now carries the lifecycle skill; integration installs it profile-locally with mode `0644`; uninstall removes only an unchanged EverRun-owned copy and preserves user modifications.
+
+### Operational cleanup
+
+The temporary Creator server `everrun-dogfood` was removed after validation. Creator now has one production `everrun` MCP entry and one production state database, preventing duplicate tool schemas and accidental writes to a test store.

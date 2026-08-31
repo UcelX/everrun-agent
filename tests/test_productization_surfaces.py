@@ -15,6 +15,9 @@ def test_hermes_dry_run_is_profile_local_and_non_mutating(tmp_path: Path) -> Non
     assert result["changed"] is False
     assert result["plan"]["db"] == str(tmp_path / "profiles/qa/everrun/everrun.db")
     assert not (tmp_path / "profiles/qa").exists()
+    assert result["plan"]["skill"].endswith(
+        "profiles/qa/skills/autonomous-ai-agents/everrun-lifecycle/SKILL.md"
+    )
 
 
 class _Completed:
@@ -41,6 +44,8 @@ def test_integrator_fails_if_hermes_test_returns_zero_but_server_is_missing(
     with pytest.raises(RuntimeError, match="not saved|handshake"):
         integrate_hermes("qa", hermes_home=tmp_path, runner=runner)
     assert calls
+    skill = tmp_path / "profiles/qa/skills/autonomous-ai-agents/everrun-lifecycle/SKILL.md"
+    assert not skill.exists()
 
 
 def test_integrator_uses_noninteractive_enable_all_and_requires_discovery(
@@ -59,6 +64,12 @@ def test_integrator_uses_noninteractive_enable_all_and_requires_discovery(
     result = integrate_hermes("qa", hermes_home=tmp_path, runner=runner)
     assert result["verified"] is True
     assert result["tools_discovered"] == 13
+    skill = tmp_path / "profiles/qa/skills/autonomous-ai-agents/everrun-lifecycle/SKILL.md"
+    assert skill.exists()
+    policy = skill.read_text(encoding="utf-8")
+    assert "description:" in policy
+    assert "mcp_everrun_everrun_list_missions" in policy
+    assert skill.stat().st_mode & 0o777 == 0o644
     add = next(call for call in calls if "add" in call)
     assert add[add.index("--command") + 1] == sys.executable
     env_index = add.index("--env")
@@ -69,6 +80,57 @@ def test_integrator_uses_noninteractive_enable_all_and_requires_discovery(
     ]
     assert add.count("--env") == 1
     assert add[-3:] == ["--args", "-m", "everrun_agent.mcp_server"]
+
+
+def test_hermes_uninstall_removes_only_everrun_owned_skill(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    monkeypatch.setattr(hermes_integration.shutil, "which", lambda _: "/usr/bin/hermes")  # type: ignore[attr-defined]
+    skill = tmp_path / "profiles/qa/skills/autonomous-ai-agents/everrun-lifecycle/SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text(hermes_integration.lifecycle_skill_text(), encoding="utf-8")
+
+    def runner(args: list[str], **_: object) -> _Completed:
+        return _Completed(stdout="✓ Removed 'everrun' from config")
+
+    result = integrate_hermes("qa", hermes_home=tmp_path, uninstall=True, runner=runner)
+    assert result["removed"] is True
+    assert not skill.exists()
+
+
+def test_hermes_uninstall_preserves_user_modified_skill(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    monkeypatch.setattr(hermes_integration.shutil, "which", lambda _: "/usr/bin/hermes")  # type: ignore[attr-defined]
+    skill = tmp_path / "profiles/qa/skills/autonomous-ai-agents/everrun-lifecycle/SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("user-owned custom policy", encoding="utf-8")
+
+    def runner(args: list[str], **_: object) -> _Completed:
+        return _Completed(stdout="✓ Removed 'everrun' from config")
+
+    result = integrate_hermes("qa", hermes_home=tmp_path, uninstall=True, runner=runner)
+    assert result["skill_preserved"] is True
+    assert skill.read_text(encoding="utf-8") == "user-owned custom policy"
+
+
+def test_wheel_configuration_packages_lifecycle_skill() -> None:
+    project = Path("pyproject.toml").read_text(encoding="utf-8")
+    assert "src/everrun_agent/integrations/hermes/SKILL.md" in project
+
+
+def test_repo_lifecycle_skill_matches_packaged_canonical_copy() -> None:
+    canonical = Path("src/everrun_agent/integrations/hermes/SKILL.md").read_text(encoding="utf-8")
+    convenience = Path("integrations/hermes/SKILL.md").read_text(encoding="utf-8")
+    assert convenience == canonical
+
+
+def test_lifecycle_policy_uses_native_tool_names_and_requires_natural_discovery() -> None:
+    policy = hermes_integration.lifecycle_skill_text()
+    assert "mcp_everrun_everrun_list_missions" in policy
+    assert "mcp_everrun_everrun_start" in policy
+    assert "mcp_everrun_everrun_claim_action" in policy
+    assert "do not wait for the user to name EverRun" in policy
 
 
 def test_mcp_error_preserves_structured_recovery_data() -> None:
