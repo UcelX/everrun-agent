@@ -100,3 +100,4 @@ def test_ci_mcp_major_gate_does_not_swallow_dependency_failure() -> None:
     workflow = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "mcp>=2' || true" not in workflow
     assert "pip check" in workflow
+    assert "-e '.[mcp]' 'mcp>=2'" in workflow

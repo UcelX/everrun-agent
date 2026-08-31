@@ -6,7 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX SIGKILL")
 def test_hard_kill_recovery_has_no_duplicate_work_or_effects(tmp_path: Path) -> None:
     """Real process death: the worker is SIGKILLed mid-mission, then a fresh
     process must resume without repeating work or the external side effect."""
@@ -47,6 +50,7 @@ def test_hard_kill_recovery_has_no_duplicate_work_or_effects(tmp_path: Path) -> 
     assert len(lines) == len(set(lines)) == 100
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows has no POSIX SIGKILL")
 def test_fault_injection_matrix_never_yields_unsafe_resume(tmp_path: Path) -> None:
     """Kill at every critical boundary; a fresh process must never report safe
     resume while an effect is unresolved, and must never duplicate work."""
