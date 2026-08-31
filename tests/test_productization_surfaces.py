@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import everrun_agent.hermes as hermes_integration
@@ -59,7 +60,7 @@ def test_integrator_uses_noninteractive_enable_all_and_requires_discovery(
     assert result["verified"] is True
     assert result["tools_discovered"] == 13
     add = next(call for call in calls if "add" in call)
-    assert add[add.index("--command") + 1].endswith("python3.11")
+    assert add[add.index("--command") + 1] == sys.executable
     env_index = add.index("--env")
     assert add[env_index + 1 : env_index + 4] == [
         "EVERRUN_DB=" + str(tmp_path / "profiles/qa/everrun/everrun.db"),
