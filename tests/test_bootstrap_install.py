@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from everrun_agent.doctor import run_doctor
 
 
@@ -49,6 +51,7 @@ def test_cli_doctor_emits_machine_readable_json(tmp_path: Path) -> None:
     assert payload["ready"] is True
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="install.sh targets POSIX servers")
 def test_install_script_bootstraps_isolated_prefix(tmp_path: Path) -> None:
     prefix = tmp_path / "everrun"
     env = os.environ.copy()
@@ -79,6 +82,7 @@ def test_install_script_bootstraps_isolated_prefix(tmp_path: Path) -> None:
     assert json.loads((prefix / "install-report.json").read_text(encoding="utf-8"))["ready"] is True
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="install.sh targets POSIX servers")
 def test_install_script_supports_safe_uninstall(tmp_path: Path) -> None:
     prefix = tmp_path / "everrun"
     subprocess.run(

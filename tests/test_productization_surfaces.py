@@ -15,8 +15,13 @@ def test_hermes_dry_run_is_profile_local_and_non_mutating(tmp_path: Path) -> Non
     assert result["changed"] is False
     assert result["plan"]["db"] == str(tmp_path / "profiles/qa/everrun/everrun.db")
     assert not (tmp_path / "profiles/qa").exists()
-    assert result["plan"]["skill"].endswith(
-        "profiles/qa/skills/autonomous-ai-agents/everrun-lifecycle/SKILL.md"
+    assert Path(result["plan"]["skill"]).parts[-6:] == (
+        "profiles",
+        "qa",
+        "skills",
+        "autonomous-ai-agents",
+        "everrun-lifecycle",
+        "SKILL.md",
     )
 
 
