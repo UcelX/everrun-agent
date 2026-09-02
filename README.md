@@ -29,6 +29,49 @@
 
 EverRun Agent is a local durability layer for autonomous agents. It stores mission progress outside the conversation, records external effects before they run, and calculates the safest recovery action after a crash, restart, or handoff.
 
+## Clone to ready
+
+On a server with Python 3.11 or newer, clone the repository and run one command:
+
+```bash
+git clone https://github.com/UcelX/everrun-agent.git
+cd everrun-agent
+./install.sh
+```
+
+The bootstrapper creates an isolated virtual environment, installs EverRun with MCP support,
+creates private state storage, detects Hermes when available, installs the profile-local MCP
+server and lifecycle policy, then runs an authoritative readiness check. It exits nonzero unless
+every selected component is ready.
+
+For unattended servers:
+
+```bash
+./install.sh --agent hermes --profile default --non-interactive
+```
+
+Core-only installation, without an agent integration:
+
+```bash
+./install.sh --agent none --non-interactive
+```
+
+The installed CLI path and machine-readable report are printed at the end. Verify again anytime:
+
+```bash
+~/.local/share/everrun-agent/venv/bin/everrun doctor \
+  --agent hermes --profile default \
+  --state-dir ~/.local/share/everrun-agent/state
+```
+
+Upgrade idempotently by pulling the repository and rerunning `./install.sh --upgrade`. Safe
+uninstall removes the managed runtime and unchanged EverRun integration while preserving mission
+state:
+
+```bash
+./install.sh --agent hermes --profile default --uninstall --non-interactive
+```
+
 It is built for work that cannot safely restart from the beginning: deployments, publishing, batch processing, infrastructure changes, payments, and other multi-step operations with real side effects.
 
 > **EverRun is not another agent.** It is the durable mission layer underneath an agent you already run.

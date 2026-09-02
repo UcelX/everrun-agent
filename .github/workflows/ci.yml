@@ -17,6 +17,13 @@ jobs:
       - run: ruff format --check src tests scripts
       - run: mypy src/everrun_agent
       - run: python -m build
+      - name: Clone-to-ready bootstrap smoke
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          ./install.sh --prefix "$RUNNER_TEMP/everrun" --agent none --non-interactive
+          "$RUNNER_TEMP/everrun/venv/bin/everrun" doctor --agent none --state-dir "$RUNNER_TEMP/everrun/state"
+          ./install.sh --prefix "$RUNNER_TEMP/everrun" --agent none --uninstall --non-interactive
   mcp-unsupported-major:
     runs-on: ubuntu-latest
     steps:

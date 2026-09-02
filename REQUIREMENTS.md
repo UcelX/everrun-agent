@@ -66,6 +66,10 @@ Every row is proven by an executable test in `tests/`. Run all gates with
 | Naive replay baseline does duplicate | `test_naive_replay_baseline_does_duplicate_the_side_effect` | VERIFIED |
 | Crash demo completes with zero duplicates | `test_crash_demo_end_to_end`, `test_cli_demo_accepts_root_alias_and_explicit_json` | VERIFIED |
 | Clean-installed MCP CLI exposes help without starting the server | `test_mcp_cli_help_does_not_start_server` | VERIFIED |
+| Clone-to-ready bootstrap installs an isolated usable runtime | `test_install_script_bootstraps_isolated_prefix` | VERIFIED |
+| Bootstrap is idempotent and emits an authoritative report | `test_install_script_bootstraps_isolated_prefix` | VERIFIED |
+| Doctor fails closed and emits machine-readable diagnostics | `test_doctor_reports_core_install_ready`, `test_doctor_fails_closed_for_missing_requested_agent`, `test_cli_doctor_emits_machine_readable_json` | VERIFIED |
+| Bootstrap uninstall preserves durable mission state | `test_install_script_supports_safe_uninstall` | VERIFIED |
 
 ## Dogfood release gates
 

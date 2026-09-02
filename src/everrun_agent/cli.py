@@ -9,6 +9,7 @@ from .adapters import install_hooks, uninstall_hooks
 from .attestation import generate_shared_key, sign_capsule, verify_capsule_signature
 from .capsule import export_capsule, import_capsule
 from .demo import run_crash_recovery_demo
+from .doctor import run_doctor
 from .environment import EnvironmentSnapshot, validate_environment
 from .handoff import AgentProfile, compile_briefing, handoff
 from .hermes import integrate_hermes
@@ -97,6 +98,12 @@ def parser() -> argparse.ArgumentParser:
     integrate.add_argument("--profile", default="default")
     integrate.add_argument("--dry-run", action="store_true")
     integrate.add_argument("--uninstall", action="store_true")
+
+    doctor = sub.add_parser("doctor", help="verify this installation and agent integration")
+    doctor.add_argument("--agent", choices=("auto", "none", "hermes"), default="auto")
+    doctor.add_argument("--profile", default="default")
+    doctor.add_argument("--state-dir", default=".everrun")
+    doctor.add_argument("--json", action="store_true", default=True)
 
     close = sub.add_parser(
         "close", help="explicit terminal transition, fails closed on unresolved work"
@@ -236,6 +243,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return EXIT_OK
+    if args.command == "doctor":
+        doctor_report = run_doctor(
+            state_dir=Path(args.state_dir), agent=args.agent, profile=args.profile
+        )
+        print(json.dumps(doctor_report, sort_keys=True))
+        return EXIT_OK if doctor_report["ready"] else EXIT_UNSAFE
     if args.command == "hooks":
         config = Path(args.config)
         db = Path(args.db)
