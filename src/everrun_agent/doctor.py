@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from . import __version__
 from .store import EverRunStore
 
 
@@ -91,7 +92,7 @@ def run_doctor(
     ready = all(item["ok"] for item in checks.values())
     return {
         "ready": ready,
-        "version": "0.1.0",
+        "version": __version__,
         "agent": selected,
         "profile": profile,
         "state_dir": str(state_dir),

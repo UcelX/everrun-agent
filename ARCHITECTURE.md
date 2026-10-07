@@ -8,6 +8,7 @@ Every fact carries its origin, and trust is earned from reality rather than asse
 
 ```text
 CLI  ·  MCP / JSON-RPC tools  ·  Adapters and lifecycle hooks
+Read-only localhost dashboard · runtime health · verified backup/restore
                     |
               Recovery kernel
    projection · checkpoints · contracts · handoff
@@ -49,6 +50,9 @@ CLI  ·  MCP / JSON-RPC tools  ·  Adapters and lifecycle hooks
 | `storage.py` | Backend protocol for future databases |
 | `cli.py` | Operator surface with exit codes as a safety contract |
 | `demo.py` | Crash-recovery proof |
+| `runtime_config.py` | Canonical database resolution shared by CLI, MCP, dashboard, and operations |
+| `operations.py` | SQLite online backup, atomic restore, and runtime health summary |
+| `dashboard.py` | Dependency-free, read-only localhost mission overview |
 
 ## Recovery ordering
 

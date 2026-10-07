@@ -8,6 +8,7 @@ from pathlib import Path
 from .adapters import install_hooks, uninstall_hooks
 from .attestation import generate_shared_key, sign_capsule, verify_capsule_signature
 from .capsule import export_capsule, import_capsule
+from .dashboard import serve_dashboard
 from .demo import run_crash_recovery_demo
 from .doctor import run_doctor
 from .environment import EnvironmentSnapshot, validate_environment
@@ -15,11 +16,13 @@ from .handoff import AgentProfile, compile_briefing, handoff
 from .hermes import integrate_hermes
 from .ledger import ActionLedger
 from .models import EventType, Mission, Origin
+from .operations import backup_database, restore_database, runtime_status
 from .projection import StateProjector
 from .recovery import recover
+from .runtime_config import resolve_database
 from .store import EverRunStore
 
-DEFAULT_DB = ".everrun/everrun.db"
+DEFAULT_DB = None
 
 EXIT_OK = 0
 EXIT_UNSAFE = 20
@@ -31,7 +34,11 @@ def parser() -> argparse.ArgumentParser:
         prog="everrun",
         description="Durable mission continuity for AI agents: verified state, safe recovery, no duplicate side effects.",
     )
-    root.add_argument("--db", default=DEFAULT_DB, help=f"mission database (default {DEFAULT_DB})")
+    root.add_argument(
+        "--db",
+        default=DEFAULT_DB,
+        help="mission database (default: EVERRUN_DB, then .everrun/everrun.db)",
+    )
     sub = root.add_subparsers(dest="command", required=True)
 
     start = sub.add_parser("init", help="create a mission")
@@ -104,6 +111,24 @@ def parser() -> argparse.ArgumentParser:
     doctor.add_argument("--profile", default="default")
     doctor.add_argument("--state-dir", default=".everrun")
     doctor.add_argument("--json", action="store_true", default=True)
+
+    runtime = sub.add_parser("runtime-status", help="summarize local runtime and mission health")
+    runtime.add_argument("--json", action="store_true")
+
+    backup = sub.add_parser("backup", help="create a verified online SQLite backup")
+    backup.add_argument("--output-dir", default=".everrun/backups")
+    backup.add_argument("--json", action="store_true")
+
+    restore = sub.add_parser("restore", help="atomically restore a verified SQLite backup")
+    restore.add_argument("path")
+    restore.add_argument("--target")
+    restore.add_argument("--overwrite", action="store_true")
+    restore.add_argument("--json", action="store_true")
+
+    dashboard = sub.add_parser("dashboard", help="serve the read-only local operator dashboard")
+    dashboard.add_argument("--host", default="127.0.0.1", help="loopback address by default")
+    dashboard.add_argument("--port", type=int, default=8765)
+    dashboard.add_argument("--allow-remote", action="store_true")
 
     close = sub.add_parser(
         "close", help="explicit terminal transition, fails closed on unresolved work"
@@ -249,9 +274,32 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(json.dumps(doctor_report, sort_keys=True))
         return EXIT_OK if doctor_report["ready"] else EXIT_UNSAFE
+    if args.command == "runtime-status":
+        database = resolve_database(args.db)
+        runtime_report = runtime_status(database)
+        _emit(runtime_report, args.json, f"healthy={runtime_report['healthy']} database={database}")
+        return EXIT_OK if runtime_report["healthy"] else EXIT_UNSAFE
+    if args.command == "backup":
+        backup_report = backup_database(resolve_database(args.db), args.output_dir)
+        _emit(backup_report, args.json, str(backup_report["path"]))
+        return EXIT_OK
+    if args.command == "restore":
+        restore_report = restore_database(
+            args.path, resolve_database(args.target), overwrite=args.overwrite
+        )
+        _emit(restore_report, args.json, str(restore_report["path"]))
+        return EXIT_OK
+    if args.command == "dashboard":
+        serve_dashboard(
+            resolve_database(args.db),
+            host=args.host,
+            port=args.port,
+            allow_remote=args.allow_remote,
+        )
+        return EXIT_OK
     if args.command == "hooks":
         config = Path(args.config)
-        db = Path(args.db)
+        db = resolve_database(args.db)
         if args.action == "install":
             print(json.dumps(install_hooks(config, args.client, db), sort_keys=True))
         else:
@@ -259,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"removed": args.client}))
         return EXIT_OK
 
-    db = Path(args.db)
+    db = resolve_database(args.db)
     db.parent.mkdir(parents=True, exist_ok=True)
     with EverRunStore(db) as store:
         if args.command == "list-missions":

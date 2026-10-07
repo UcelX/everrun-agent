@@ -6,6 +6,7 @@ import os
 import sys
 from typing import Any
 
+from .runtime_config import resolve_database
 from .service import ToolReply, ToolRequest, ToolServer
 
 
@@ -39,7 +40,7 @@ def build_server_from_env() -> ToolServer:
         )
         allowlist = ()
     return ToolServer(
-        db_path=os.environ.get("EVERRUN_DB", ".everrun/everrun.db"),
+        db_path=resolve_database(),
         mutating_clients=allowlist,
         confirm_token=os.environ.get("EVERRUN_CONFIRM_TOKEN"),
         transport_client=transport_client,

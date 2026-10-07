@@ -70,6 +70,12 @@ Every row is proven by an executable test in `tests/`. Run all gates with
 | Bootstrap is idempotent and emits an authoritative report | `test_install_script_bootstraps_isolated_prefix` | VERIFIED |
 | Doctor fails closed and emits machine-readable diagnostics | `test_doctor_reports_core_install_ready`, `test_doctor_fails_closed_for_missing_requested_agent`, `test_cli_doctor_emits_machine_readable_json` | VERIFIED |
 | Bootstrap uninstall preserves durable mission state | `test_install_script_supports_safe_uninstall` | VERIFIED |
+| Bootstrap exposes stable commands without venv activation | `test_install_script_bootstraps_isolated_prefix` | VERIFIED |
+| CLI, MCP, dashboard, and operations share one canonical managed database | `test_database_resolution_precedence_is_explicit_env_then_local`, `test_cli_uses_environment_database_from_any_working_directory`, `test_explicit_cli_database_overrides_environment`, `test_install_script_bootstraps_isolated_prefix` | VERIFIED |
+| Online SQLite backup is private, consistent, and integrity-checked | `test_backup_is_consistent_verified_and_private`, `test_backup_uses_sqlite_snapshot_not_file_copy` | VERIFIED |
+| Restore is atomic, integrity-checked, and refuses accidental overwrite | `test_restore_refuses_to_overwrite_and_restores_atomically`, `test_restore_rejects_corrupt_sqlite` | VERIFIED |
+| Runtime status summarizes real local mission health | `test_runtime_status_summarizes_real_missions`, `test_cli_status_backup_restore_and_dashboard_help` | VERIFIED |
+| Local dashboard is read-only and loopback-only by default | `test_local_dashboard_binds_loopback_and_exposes_read_only_json`, `test_dashboard_refuses_non_loopback_without_explicit_override` | VERIFIED |
 
 ## Dogfood release gates
 
@@ -91,7 +97,7 @@ See `DOGFOOD.md` for observed friction, live acceptance evidence, and remaining 
 
 | Item | Status |
 |---|---|
-| Local mission dashboard and operator UI | DEFERRED to v0.2 |
+| Dashboard mutation/approval controls | DEFERRED; v0.1.1 ships a read-only local dashboard |
 | Ed25519 asymmetric attestation | DEFERRED to v0.2 |
 | Log compaction and archival | DEFERRED to v0.2 |
 | PostgreSQL backend implementation | CONTRACT ONLY |

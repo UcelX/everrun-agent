@@ -42,7 +42,7 @@ if ((UNINSTALL)); then
   if [[ "$AGENT" == "hermes" || ( "$AGENT" == "auto" && -x "$VENV/bin/everrun" && -x "$(command -v hermes 2>/dev/null || true)" ) ]]; then
     "$VENV/bin/everrun" integrate hermes --profile "$PROFILE" --uninstall || true
   fi
-  rm -rf "$VENV"
+  rm -rf "$VENV" "$PREFIX/bin"
   rm -f "$REPORT"
   printf 'EverRun runtime removed. Mission state preserved at %s\n' "$STATE"
   exit 0
@@ -66,6 +66,21 @@ if [[ ! -x "$VENV/bin/python" ]]; then
 fi
 "$VENV/bin/python" -m pip install --disable-pip-version-check --upgrade pip >/dev/null
 "$VENV/bin/python" -m pip install --disable-pip-version-check --upgrade "$ROOT[mcp]" >/dev/null
+
+# Stable product-owned entrypoints: users do not need to activate the venv.
+mkdir -p "$PREFIX/bin"
+ln -sfn "$VENV/bin/everrun" "$PREFIX/bin/everrun"
+ln -sfn "$VENV/bin/everrun-mcp" "$PREFIX/bin/everrun-mcp"
+
+# Managed launchers pin every surface to the same durable database regardless
+# of the caller's current working directory.
+cat > "$PREFIX/bin/everrun-managed" <<EOF
+#!/usr/bin/env bash
+export EVERRUN_DB="${STATE}/everrun.db"
+exec "${VENV}/bin/everrun" "\$@"
+EOF
+chmod 700 "$PREFIX/bin/everrun-managed"
+ln -sfn "$PREFIX/bin/everrun-managed" "$PREFIX/bin/everrun"
 
 SELECTED="$AGENT"
 if [[ "$SELECTED" == "auto" ]]; then

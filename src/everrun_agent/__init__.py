@@ -15,6 +15,8 @@ from .projection import StateProjector
 from .recovery import recover
 from .store import EverRunStore
 
+__version__ = "0.1.1"
+
 __all__ = [
     "ActionClaim",
     "ActionLedger",
@@ -28,6 +30,7 @@ __all__ = [
     "RecoveryMode",
     "StateProjector",
     "UncertainAction",
+    "__version__",
     "checkpoint",
     "recover",
 ]

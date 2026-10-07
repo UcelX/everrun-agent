@@ -66,9 +66,24 @@ def test_install_script_bootstraps_isolated_prefix(tmp_path: Path) -> None:
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert (prefix / "venv/bin/everrun").exists()
+    assert (prefix / "bin/everrun").is_symlink()
+    assert (prefix / "bin/everrun-mcp").is_symlink()
     report = json.loads((prefix / "install-report.json").read_text(encoding="utf-8"))
     assert report["ready"] is True
     assert report["agent"] == "none"
+
+    foreign_cwd = tmp_path / "foreign"
+    foreign_cwd.mkdir()
+    created = subprocess.run(
+        [str(prefix / "bin/everrun"), "init", "installed-mission", "same managed database"],
+        cwd=foreign_cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert created.returncode == 0, created.stderr
+    assert (prefix / "state/everrun.db").exists()
+    assert not (foreign_cwd / ".everrun").exists()
 
     second = subprocess.run(
         ["bash", "install.sh", "--prefix", str(prefix), "--agent", "none", "--non-interactive"],

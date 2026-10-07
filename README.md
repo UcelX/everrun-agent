@@ -56,13 +56,23 @@ Core-only installation, without an agent integration:
 ./install.sh --agent none --non-interactive
 ```
 
-The installed CLI path and machine-readable report are printed at the end. Verify again anytime:
+The installed CLI path and machine-readable report are printed at the end. A stable product-owned command is created at `~/.local/share/everrun-agent/bin/everrun`, so users never need to activate the internal virtual environment. Verify again anytime:
 
 ```bash
-~/.local/share/everrun-agent/venv/bin/everrun doctor \
+~/.local/share/everrun-agent/bin/everrun doctor \
   --agent hermes --profile default \
   --state-dir ~/.local/share/everrun-agent/state
 ```
+
+Inspect runtime health, create an online backup, or open the local read-only dashboard:
+
+```bash
+~/.local/share/everrun-agent/bin/everrun --db ~/.local/share/everrun-agent/state/everrun.db runtime-status --json
+~/.local/share/everrun-agent/bin/everrun --db ~/.local/share/everrun-agent/state/everrun.db backup --output-dir ~/.local/share/everrun-agent/backups --json
+~/.local/share/everrun-agent/bin/everrun --db ~/.local/share/everrun-agent/state/everrun.db dashboard
+```
+
+The dashboard listens on `127.0.0.1:8765` by default and exposes no mutation endpoint. Restore is explicit and refuses to overwrite an existing database unless `--overwrite` is supplied.
 
 Upgrade idempotently by pulling the repository and rerunning `./install.sh --upgrade`. Safe
 uninstall removes the managed runtime and unchanged EverRun integration while preserving mission
