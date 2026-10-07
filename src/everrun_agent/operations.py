@@ -11,6 +11,12 @@ from typing import Any
 from .store import EverRunStore
 
 
+def _readonly_uri(path: Path) -> str:
+    """Return a cross-platform SQLite read-only URI, including Windows drives."""
+
+    return f"{path.resolve().as_uri()}?mode=ro"
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -21,7 +27,7 @@ def _sha256(path: Path) -> str:
 
 def _integrity(path: Path) -> None:
     try:
-        with sqlite3.connect(f"file:{path}?mode=ro", uri=True) as conn:
+        with sqlite3.connect(_readonly_uri(path), uri=True) as conn:
             row = conn.execute("PRAGMA integrity_check").fetchone()
     except sqlite3.Error as exc:
         raise ValueError(f"database integrity check failed: {exc}") from exc
@@ -44,7 +50,7 @@ def backup_database(source: str | Path, backup_dir: str | Path) -> dict[str, Any
     temporary = Path(temporary_name)
     try:
         with (
-            sqlite3.connect(f"file:{source_path}?mode=ro", uri=True) as src,
+            sqlite3.connect(_readonly_uri(source_path), uri=True) as src,
             sqlite3.connect(temporary) as dst,
         ):
             src.backup(dst)
@@ -78,7 +84,7 @@ def restore_database(
     temporary = Path(temporary_name)
     try:
         with (
-            sqlite3.connect(f"file:{backup_path}?mode=ro", uri=True) as src,
+            sqlite3.connect(_readonly_uri(backup_path), uri=True) as src,
             sqlite3.connect(temporary) as dst,
         ):
             src.backup(dst)

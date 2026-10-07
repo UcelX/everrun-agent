@@ -13,7 +13,12 @@ import pytest
 
 from everrun_agent.dashboard import DashboardServer
 from everrun_agent.models import Mission
-from everrun_agent.operations import backup_database, restore_database, runtime_status
+from everrun_agent.operations import (
+    _readonly_uri,
+    backup_database,
+    restore_database,
+    runtime_status,
+)
 from everrun_agent.store import EverRunStore
 
 
@@ -22,6 +27,14 @@ def _seed(path: Path) -> None:
     with EverRunStore(path) as store:
         store.create_mission(Mission("mission-1", "prove recovery", 1))
         store.append_work("mission-1", "work-1")
+
+
+def test_readonly_sqlite_uri_is_cross_platform_and_escaped(tmp_path: Path) -> None:
+    target = tmp_path / "state with space/everrun.db"
+    uri = _readonly_uri(target)
+    assert uri.startswith("file:")
+    assert "%20" in uri
+    assert uri.endswith("?mode=ro")
 
 
 def test_backup_is_consistent_verified_and_private(tmp_path: Path) -> None:
