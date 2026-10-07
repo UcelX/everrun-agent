@@ -34,7 +34,8 @@ def test_backup_is_consistent_verified_and_private(tmp_path: Path) -> None:
     assert artifact.exists()
     assert result["integrity"] == "ok"
     assert result["sha256"]
-    assert artifact.stat().st_mode & 0o777 == 0o600
+    if sys.platform != "win32":
+        assert artifact.stat().st_mode & 0o777 == 0o600
     with EverRunStore(artifact) as copied:
         assert copied.verify_chain("mission-1").ok
 
